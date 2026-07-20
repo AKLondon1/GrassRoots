@@ -5,6 +5,7 @@ import { ApplicationShell } from "@/components/shell/application-shell";
 import { DeniedState } from "@/components/ui/denied-state";
 import { getDemoCapabilities } from "@/lib/access/demo-access-policy";
 import { brand } from "@/lib/brand";
+import { getDemoSession } from "@/lib/demo/session";
 import {
   parseAppRole,
   resolveScreenSection,
@@ -27,7 +28,9 @@ export default async function WorkspaceSectionPage({
   const [{ section, workspace }, query] = await Promise.all([params, searchParams]);
   const requestedRole = Array.isArray(query.role) ? query.role[0] : query.role;
   const role = parseAppRole(requestedRole);
-  const capabilities = getDemoCapabilities(role);
+  const session = getDemoSession(role);
+  if (workspace !== session.organisation.slug) notFound();
+  const capabilities = getDemoCapabilities(session.role);
   const resolution = resolveScreenSection({
     capabilities,
     role,

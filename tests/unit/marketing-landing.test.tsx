@@ -54,4 +54,13 @@ describe("marketing landing page", () => {
 
     expect(screen.getAllByText(brand.identity.mark).length).toBeGreaterThanOrEqual(2);
   });
+
+  it("links the public header to the honest sign-in boundary", () => {
+    render(<Home />);
+
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/sign-in",
+    );
+  });
 });

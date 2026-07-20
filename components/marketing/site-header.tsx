@@ -41,7 +41,7 @@ function SiteHeader() {
         </nav>
 
         <Button asChild size="small">
-          <a href="#weekly-view">Explore GrassRoots</a>
+          <a href="/sign-in">Sign in</a>
         </Button>
       </div>
     </header>
