@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="GrassRoots football mark">
+  <rect width="512" height="512" rx="112" fill="#0e5c54"/>
+  <path d="M86 359c55-38 113-57 174-57 59 0 114 18 166 54v70H86z" fill="#d8eee8" opacity=".3"/>
+  <path d="M133 365c35-89 75-152 121-188-12 57-8 119 12 188M379 365c-35-89-75-152-121-188 12 57 8 119-12 188" fill="none" stroke="#f8fbf9" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="256" cy="151" r="76" fill="#f8fbf9"/>
+  <path d="m256 105 31 23-12 37h-38l-12-37zm-64 44 33-21 12 37-29 22zm128 0-16 38-29-22 12-37zm-91 73 8-57h38l8 57-27 19zm-21-35 21 35-28 20-25-28zm96 0 16 27-25 28-12-20z" fill="#d49a40"/>
+</svg>
