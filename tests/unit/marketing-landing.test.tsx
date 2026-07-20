@@ -44,5 +44,14 @@ describe("marketing landing page", () => {
 
     expect(screen.getAllByText(/illustrative product preview/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/integration complete/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "Illustrative product navigation" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses the central visual identity mark", () => {
+    render(<Home />);
+
+    expect(screen.getAllByText(brand.identity.mark).length).toBeGreaterThanOrEqual(2);
   });
 });

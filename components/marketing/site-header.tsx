@@ -20,7 +20,7 @@ function SiteHeader() {
             className="flex size-8 items-center justify-center rounded-[10px] bg-primary-strong text-sm font-bold text-primary-foreground transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-rotate-3"
             aria-hidden="true"
           >
-            GR
+            {brand.identity.mark}
           </span>
           <span>{brand.name}</span>
         </a>

@@ -78,8 +78,11 @@ function WeeklyViewPreview() {
     <div className="flex h-full min-w-0 flex-col bg-background text-ink">
       <div className="flex min-h-14 items-center justify-between border-b border-border px-4 sm:px-6">
         <div className="flex items-center gap-2.5 font-semibold tracking-[-0.02em]">
-          <span className="flex size-7 items-center justify-center rounded-lg bg-primary-strong text-[10px] font-bold text-primary-foreground">
-            GR
+          <span
+            className="flex size-7 items-center justify-center rounded-lg bg-primary-strong text-[10px] font-bold text-primary-foreground"
+            aria-label={brand.identity.markLabel}
+          >
+            {brand.identity.mark}
           </span>
           {brand.name}
         </div>
@@ -89,9 +92,9 @@ function WeeklyViewPreview() {
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-52 shrink-0 border-r border-border bg-surface p-4 md:block">
           <p className="px-2 text-xs font-semibold text-muted">Riverside Juniors</p>
-          <nav aria-label="Illustrative product navigation" className="mt-4 space-y-1">
+          <ul aria-label="Illustrative product destinations" className="mt-4 space-y-1">
             {previewNavigation.map(([Icon, label, active]) => (
-              <div
+              <li
                 key={String(label)}
                 className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium ${
                   active ? "bg-primary-strong text-primary-foreground" : "text-muted"
@@ -99,9 +102,9 @@ function WeeklyViewPreview() {
               >
                 <Icon className="size-4" aria-hidden="true" />
                 {label}
-              </div>
+              </li>
             ))}
-          </nav>
+          </ul>
         </aside>
 
         <div className="min-w-0 flex-1 overflow-hidden p-4 sm:p-6 lg:p-8">
