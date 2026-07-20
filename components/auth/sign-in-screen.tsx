@@ -22,9 +22,14 @@ const demoLabels: Record<AppRole, string> = {
 interface SignInScreenProps {
   callbackError?: boolean;
   mode: DataMode;
+  nextPath?: string;
 }
 
-export function SignInScreen({ callbackError = false, mode }: SignInScreenProps) {
+export function SignInScreen({
+  callbackError = false,
+  mode,
+  nextPath = "/",
+}: SignInScreenProps) {
   return (
     <main className="min-h-dvh bg-surface px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto flex w-full max-w-5xl flex-col">
@@ -81,7 +86,7 @@ export function SignInScreen({ callbackError = false, mode }: SignInScreenProps)
                 <p className="mt-4 max-w-[55ch] text-sm leading-6 text-muted">
                   We will email you a single-use link. No password is needed.
                 </p>
-                <MagicLinkForm />
+                <MagicLinkForm nextPath={nextPath} />
               </>
             ) : (
               <>

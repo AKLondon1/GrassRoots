@@ -4,6 +4,7 @@ import { z } from "zod";
 import { headers } from "next/headers";
 
 import { environment } from "@/lib/env";
+import { normaliseInternalPath } from "@/lib/supabase/auth-callback";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { DataMode } from "@/lib/supabase/types";
 
@@ -77,10 +78,18 @@ export async function submitMagicLink(
   formData: FormData,
 ): Promise<MagicLinkState> {
   const origin = (await headers()).get("origin");
+  const nextPath = normaliseInternalPath(
+    typeof formData.get("next") === "string"
+      ? String(formData.get("next"))
+      : "/",
+  );
   let emailRedirectTo: string | undefined;
   try {
     emailRedirectTo = origin
-      ? new URL("/auth/callback?next=/", origin).toString()
+      ? new URL(
+          `/auth/callback?next=${encodeURIComponent(nextPath)}`,
+          origin,
+        ).toString()
       : undefined;
   } catch {
     emailRedirectTo = undefined;

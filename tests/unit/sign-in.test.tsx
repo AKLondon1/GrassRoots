@@ -35,6 +35,14 @@ describe("sign in", () => {
     expect(screen.queryByRole("link", { name: /demo/i })).not.toBeInTheDocument();
   });
 
+  it("preserves a safe invitation return path through magic-link sign in", () => {
+    render(<SignInScreen mode="supabase" nextPath="/invite/raw-token" />);
+
+    expect(
+      document.querySelector('input[name="next"]'),
+    ).toHaveAttribute("value", "/invite/raw-token");
+  });
+
   it("shows an honest callback error", () => {
     render(<SignInScreen callbackError mode="supabase" />);
 

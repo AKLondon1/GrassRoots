@@ -144,12 +144,24 @@ create table public.organisation_invites (
   id uuid primary key default gen_random_uuid(),
   organisation_id uuid not null references public.organisations(id) on delete cascade,
   email text not null check (email = lower(email)),
+  role_id uuid not null,
+  scope_kind public.scope_kind not null,
+  scope_id uuid not null,
+  resource_type text,
   token_digest text not null unique check (length(token_digest) >= 32),
   expires_at timestamptz not null,
   accepted_at timestamptz,
+  accepted_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  foreign key (role_id, organisation_id)
+    references public.roles(id, organisation_id) on delete cascade,
   unique (id, organisation_id),
+  check (scope_kind <> 'organisation' or scope_id = organisation_id),
+  check (
+    (scope_kind = 'resource' and resource_type is not null)
+    or (scope_kind <> 'resource' and resource_type is null)
+  ),
   check (expires_at > created_at),
   check (accepted_at is null or accepted_at >= created_at)
 );
@@ -396,12 +408,185 @@ begin
 end;
 $$;
 
+create function public.issue_organisation_invite(
+  requested_organisation_id uuid,
+  invite_email text,
+  invite_role_id uuid,
+  invite_scope_kind public.scope_kind,
+  invite_scope_id uuid,
+  invite_resource_type text,
+  invite_token_digest text,
+  invite_expires_at timestamptz
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  created_invite_id uuid;
+begin
+  if not public.has_capability(
+    requested_organisation_id,
+    'invitations:manage',
+    invite_scope_kind,
+    invite_scope_id,
+    invite_resource_type
+  ) or not public.has_capability(
+    requested_organisation_id,
+    'roles:manage',
+    invite_scope_kind,
+    invite_scope_id,
+    invite_resource_type
+  ) then
+    raise insufficient_privilege using message = 'Invitation issuance is not authorised';
+  end if;
+
+  if invite_token_digest !~ '^[0-9a-f]{64}$' then
+    raise exception 'Invitation digest is invalid';
+  end if;
+  if invite_expires_at <= now() then
+    raise exception 'Invitation expiry must be in the future';
+  end if;
+
+  insert into public.organisation_invites (
+    organisation_id,
+    email,
+    role_id,
+    scope_kind,
+    scope_id,
+    resource_type,
+    token_digest,
+    expires_at
+  )
+  values (
+    requested_organisation_id,
+    lower(btrim(invite_email)),
+    invite_role_id,
+    invite_scope_kind,
+    invite_scope_id,
+    invite_resource_type,
+    invite_token_digest,
+    invite_expires_at
+  )
+  returning id into created_invite_id;
+
+  return created_invite_id;
+end;
+$$;
+
+create function public.accept_organisation_invite(invite_token_digest text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  invite public.organisation_invites%rowtype;
+  authenticated_email text;
+  accepted_membership_id uuid;
+  accepted_membership_status public.membership_status;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  select * into invite
+  from public.organisation_invites organisation_invite
+  where organisation_invite.token_digest = $1
+  for update;
+
+  if not found or invite.accepted_at is not null or invite.expires_at <= now() then
+    raise exception 'Invitation could not be accepted';
+  end if;
+
+  select lower(coalesce(
+    auth.jwt() ->> 'email',
+    current_setting('request.jwt.claim.email', true),
+    ''
+  )) into authenticated_email;
+  if authenticated_email = '' or authenticated_email <> invite.email then
+    raise exception 'Invitation could not be accepted';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles profile
+    where profile.id = auth.uid() and profile.account_type = 'adult'
+  ) then
+    raise exception 'Invitation could not be accepted';
+  end if;
+
+  if not exists (
+    select 1 from public.organisations organisation
+    where organisation.id = invite.organisation_id
+      and organisation.status = 'active'
+  ) then
+    raise exception 'Invitation could not be accepted';
+  end if;
+
+  insert into public.memberships (
+    organisation_id,
+    user_id,
+    status,
+    joined_at
+  )
+  values (invite.organisation_id, auth.uid(), 'active', now())
+  on conflict (organisation_id, user_id) do nothing
+  returning id, status into accepted_membership_id, accepted_membership_status;
+
+  if accepted_membership_id is null then
+    select membership.id, membership.status
+    into accepted_membership_id, accepted_membership_status
+    from public.memberships membership
+    where membership.organisation_id = invite.organisation_id
+      and membership.user_id = auth.uid()
+    for update;
+  end if;
+
+  if accepted_membership_id is null or accepted_membership_status <> 'active' then
+    raise exception 'Invitation could not be accepted';
+  end if;
+
+  insert into public.scoped_role_assignments (
+    organisation_id,
+    membership_id,
+    role_id,
+    scope_kind,
+    scope_id,
+    resource_type
+  )
+  values (
+    invite.organisation_id,
+    accepted_membership_id,
+    invite.role_id,
+    invite.scope_kind,
+    invite.scope_id,
+    invite.resource_type
+  )
+  on conflict do nothing;
+
+  update public.organisation_invites
+  set accepted_at = now(), accepted_by = auth.uid()
+  where id = invite.id;
+
+  return accepted_membership_id;
+end;
+$$;
+
 revoke all on function public.has_active_membership(uuid) from public;
 revoke all on function public.has_capability(uuid, text, public.scope_kind, uuid, text) from public;
 revoke all on function public.create_organisation(text, text) from public;
+revoke all on function public.issue_organisation_invite(
+  uuid, text, uuid, public.scope_kind, uuid, text, text, timestamptz
+) from public;
+revoke all on function public.accept_organisation_invite(text) from public;
 grant execute on function public.has_active_membership(uuid) to authenticated;
 grant execute on function public.has_capability(uuid, text, public.scope_kind, uuid, text) to authenticated;
 grant execute on function public.create_organisation(text, text) to authenticated;
+grant execute on function public.issue_organisation_invite(
+  uuid, text, uuid, public.scope_kind, uuid, text, text, timestamptz
+) to authenticated;
+grant execute on function public.accept_organisation_invite(text) to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.organisations enable row level security;
@@ -585,27 +770,6 @@ using (
     null
   )
 );
-create policy invites_manage_scoped
-on public.organisation_invites for all to authenticated
-using (
-  public.has_capability(
-    organisation_id,
-    'invitations:manage',
-    'organisation',
-    organisation_id,
-    null
-  )
-)
-with check (
-  public.has_capability(
-    organisation_id,
-    'invitations:manage',
-    'organisation',
-    organisation_id,
-    null
-  )
-);
-
 grant select, update on public.profiles to authenticated;
 grant select, update, delete on public.organisations to authenticated;
 grant select, insert, update, delete on public.memberships to authenticated;
@@ -616,4 +780,4 @@ grant select, insert, update, delete on public.scoped_role_assignments to authen
 grant select, insert, update, delete on public.organisation_settings to authenticated;
 grant select, insert, update, delete on public.entitlements to authenticated;
 grant select, insert, update, delete on public.seasons to authenticated;
-grant select, insert, update, delete on public.organisation_invites to authenticated;
+grant select on public.organisation_invites to authenticated;

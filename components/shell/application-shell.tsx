@@ -26,6 +26,7 @@ import {
 interface ApplicationShellProps {
   activeSection: string;
   capabilities: readonly string[];
+  isDemo?: boolean;
   role: AppRole;
   workspace: string;
 }
@@ -76,6 +77,7 @@ const roleDemo = {
 function ApplicationShell({
   activeSection,
   capabilities,
+  isDemo = true,
   role,
   workspace,
 }: ApplicationShellProps) {
@@ -105,13 +107,15 @@ function ApplicationShell({
 
           <div className="flex items-center gap-2">
             <CommandMenu role={role} screens={screens} workspace={workspace} />
-            <RoleSwitcher value={role} workspace={workspace} />
+            {isDemo ? <RoleSwitcher value={role} workspace={workspace} /> : null}
           </div>
         </div>
-        <div className="border-t border-info/20 bg-info-soft px-4 py-2 text-center text-xs font-medium leading-5 text-info-strong sm:px-6">
-          <strong>Illustrative demo.</strong> Sign-in and saving are not connected;
-          changes are not saved.
-        </div>
+        {isDemo ? (
+          <div className="border-t border-info/20 bg-info-soft px-4 py-2 text-center text-xs font-medium leading-5 text-info-strong sm:px-6">
+            <strong>Illustrative demo.</strong> Sign-in and saving are not connected;
+            changes are not saved.
+          </div>
+        ) : null}
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -132,7 +136,7 @@ function ApplicationShell({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-primary-strong">
-                  {roleLabels[role]} preview
+                  {roleLabels[role]}{isDemo ? " preview" : ""}
                 </p>
                 <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-ink sm:text-4xl">
                   {isDefaultScreen ? demo.title : currentScreen.label}
@@ -141,7 +145,9 @@ function ApplicationShell({
                   {isDefaultScreen ? demo.summary : currentScreen.states.empty.description}
                 </p>
               </div>
-              <Status tone="info">Demo mode</Status>
+              <Status tone="info">
+                {isDemo ? "Demo mode" : "Organisation access"}
+              </Status>
             </div>
 
             <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.55fr)]">
@@ -201,7 +207,9 @@ function ApplicationShell({
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-info-strong" aria-hidden="true" />
                   )}
                   <p className="text-xs leading-5 text-muted">
-                    Preview data is fictional and remains in this browser session only.
+                    {isDemo
+                      ? "Preview data is fictional and remains in this browser session only."
+                      : "Access is limited by your active organisation membership and assigned capabilities."}
                   </p>
                 </div>
               </aside>

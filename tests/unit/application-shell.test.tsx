@@ -73,6 +73,22 @@ describe("illustrative application shell", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not label an authorised Supabase workspace as a demo", () => {
+    render(
+      <ApplicationShell
+        activeSection="today"
+        capabilities={["team:view"]}
+        isDemo={false}
+        role="coach"
+        workspace="riverside-juniors"
+      />,
+    );
+
+    expect(screen.queryByText(/illustrative demo/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/changes are not saved/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Organisation access")).toBeInTheDocument();
+  });
+
   it("switches roles by navigating to that role's valid default screen", async () => {
     const user = userEvent.setup();
     render(

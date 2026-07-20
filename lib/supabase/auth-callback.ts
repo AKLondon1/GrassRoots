@@ -15,7 +15,7 @@ export function createAuthResponseHeaders(): Headers {
   });
 }
 
-function safeNextPath(value: string | null): string {
+export function normaliseInternalPath(value: string | null | undefined): string {
   return value?.startsWith("/") &&
     !value.startsWith("//") &&
     !/[\\\u0000-\u001f]/.test(value)
@@ -43,7 +43,7 @@ export async function completeAuthCallback(
   }
 
   return {
-    destination: safeNextPath(url.searchParams.get("next")),
+    destination: normaliseInternalPath(url.searchParams.get("next")),
     status: "success",
   };
 }

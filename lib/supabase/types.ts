@@ -105,9 +105,14 @@ export interface Database {
       organisation_invites: Table<
         TenantRow & {
           email: string;
+          role_id: string;
+          scope_kind: "organisation" | "team" | "resource";
+          scope_id: string;
+          resource_type: string | null;
           token_digest: string;
           expires_at: string;
           accepted_at: string | null;
+          accepted_by: string | null;
         }
       >;
     };
@@ -126,6 +131,23 @@ export interface Database {
           requested_resource_type?: string | null;
         };
         Returns: boolean;
+      };
+      issue_organisation_invite: {
+        Args: {
+          requested_organisation_id: string;
+          invite_email: string;
+          invite_role_id: string;
+          invite_scope_kind: "organisation" | "team" | "resource";
+          invite_scope_id: string;
+          invite_resource_type: string | null;
+          invite_token_digest: string;
+          invite_expires_at: string;
+        };
+        Returns: string;
+      };
+      accept_organisation_invite: {
+        Args: { invite_token_digest: string };
+        Returns: string;
       };
     };
     Enums: {

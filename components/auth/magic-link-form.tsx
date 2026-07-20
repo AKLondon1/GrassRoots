@@ -24,7 +24,7 @@ function SubmitButton() {
   );
 }
 
-export function MagicLinkForm() {
+export function MagicLinkForm({ nextPath = "/" }: { nextPath?: string }) {
   const [state, formAction] = useActionState(
     submitMagicLink,
     initialMagicLinkState,
@@ -33,6 +33,7 @@ export function MagicLinkForm() {
 
   return (
     <form action={formAction} className="mt-8" noValidate>
+      <input name="next" type="hidden" value={nextPath} />
       <label className="block text-sm font-semibold text-ink" htmlFor="email">
         Email address
       </label>
