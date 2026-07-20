@@ -48,6 +48,21 @@ export interface ScopedRoleAssignment {
   scope: PermissionScope;
 }
 
+export interface ScopedGrantRole {
+  readonly id: string;
+  readonly key: string;
+  readonly label: string;
+}
+
+export interface ScopedCapabilityGrant {
+  readonly organisationId: string;
+  readonly scopeKind: PermissionScope["kind"];
+  readonly scopeId: string;
+  readonly resourceType: string | null;
+  readonly role: ScopedGrantRole;
+  readonly capabilities: readonly Capability[];
+}
+
 export interface AuthorisationContext {
   assignments: readonly ScopedRoleAssignment[];
   membership: OrganisationMembership;

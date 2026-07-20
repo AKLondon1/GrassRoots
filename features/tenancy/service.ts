@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { OrganisationMembership } from "@/features/tenancy/types";
+import type {
+  Capability,
+  OrganisationMembership,
+  ScopedCapabilityGrant,
+} from "@/features/tenancy/types";
 import type { AppRole } from "@/lib/navigation/screen-registry";
 import type { Database } from "@/lib/supabase/types";
 
@@ -23,6 +27,7 @@ interface OrganisationRecord {
 }
 
 interface AssignmentRecord {
+  organisationId: string;
   roleId: string;
   scopeKind: "organisation" | "team" | "resource";
   scopeId: string;
@@ -66,21 +71,24 @@ export type ProductionWorkspaceAccess =
       organisationId: string;
       membershipId: string;
       role: AppRole;
-      capabilities: readonly `${string}:${string}`[];
+      /** Navigation hints only; never authorise a record mutation from this union. */
+      capabilities: readonly Capability[];
+      /** Downstream mutations must match their exact target against these grants. */
+      scopedGrants: readonly ScopedCapabilityGrant[];
     }
   | { status: "denied"; reason: "membership" | "capability" };
 
+function appRoleForAssignedKey(key: string): AppRole {
+  if (key === "parent" || key === "guardian") return "parent";
+  if (key === "coach" || key === "manager") return "coach";
+  if (key === "platform-owner" || key === "platform-operator") {
+    return "platform";
+  }
+  return "club";
+}
+
 function appRoleForAssignedKeys(keys: readonly string[]): AppRole | undefined {
-  const mapped = new Set(
-    keys.map((key) => {
-      if (key === "parent" || key === "guardian") return "parent";
-      if (key === "coach" || key === "manager") return "coach";
-      if (key === "platform-owner" || key === "platform-operator") {
-        return "platform";
-      }
-      return "club";
-    }),
-  );
+  const mapped = new Set(keys.map(appRoleForAssignedKey));
 
   return (["platform", "club", "coach", "parent"] as const).find((role) =>
     mapped.has(role),
@@ -102,26 +110,66 @@ export async function resolveProductionWorkspaceAccess(
     membership.id,
     organisation.id,
   );
-  const organisationAssignments = assignments.filter(
-    (assignment) =>
-      assignment.scopeKind === "organisation" &&
-      assignment.scopeId === organisation.id,
+  const scopedAssignments = assignments.filter(
+    (assignment) => assignment.organisationId === organisation.id,
   );
-  const roleIds = [...new Set(organisationAssignments.map(({ roleId }) => roleId))];
+  const roleIds = [...new Set(scopedAssignments.map(({ roleId }) => roleId))];
   if (roleIds.length === 0) return { status: "denied", reason: "capability" };
 
   const [roles, permissions] = await Promise.all([
     reader.listRoles(organisation.id, roleIds),
     reader.listRolePermissions(organisation.id, roleIds),
   ]);
-  const role = appRoleForAssignedKeys(roles.map(({ key }) => key));
-  const capabilities = [
-    ...new Set(
-      permissions
-        .filter(({ roleId }) => roleIds.includes(roleId))
-        .map(({ capability }) => capability),
-    ),
-  ];
+  const assignedRoles = roles.filter(({ id }) => roleIds.includes(id));
+  const role = appRoleForAssignedKeys(assignedRoles.map(({ key }) => key));
+  const roleById = new Map(
+    assignedRoles.map((assignedRole) => [assignedRole.id, assignedRole]),
+  );
+  const capabilitiesByRole = new Map<string, readonly Capability[]>();
+  roleIds.forEach((roleId) => {
+    capabilitiesByRole.set(
+      roleId,
+      Object.freeze([
+        ...new Set(
+          permissions
+            .filter((permission) => permission.roleId === roleId)
+            .map(({ capability }) => capability),
+        ),
+      ]),
+    );
+  });
+  const scopedGrants = Object.freeze(
+    scopedAssignments.flatMap((assignment): ScopedCapabilityGrant[] => {
+      const assignedRole = roleById.get(assignment.roleId);
+      if (!assignedRole) return [];
+      return [
+        Object.freeze({
+          organisationId: assignment.organisationId,
+          scopeKind: assignment.scopeKind,
+          scopeId: assignment.scopeId,
+          resourceType: assignment.resourceType,
+          role: Object.freeze({
+            id: assignedRole.id,
+            key: assignedRole.key,
+            label: assignedRole.label,
+          }),
+          capabilities:
+            capabilitiesByRole.get(assignment.roleId) ?? Object.freeze([]),
+        }),
+      ];
+    }),
+  );
+  const capabilities = Object.freeze(
+    role
+      ? [
+          ...new Set(
+            scopedGrants
+              .filter((grant) => appRoleForAssignedKey(grant.role.key) === role)
+              .flatMap((grant) => grant.capabilities),
+          ),
+        ]
+      : [],
+  );
 
   if (!role || capabilities.length === 0) {
     return { status: "denied", reason: "capability" };
@@ -133,6 +181,7 @@ export async function resolveProductionWorkspaceAccess(
     membershipId: membership.id,
     role,
     capabilities,
+    scopedGrants,
   };
 }
 
@@ -181,17 +230,19 @@ export function createSupabaseTenancyAccessReader(
     async listAssignments(membershipId, organisationId) {
       const { data, error } = await databaseClient
         .from("scoped_role_assignments")
-        .select("role_id, scope_kind, scope_id, resource_type")
+        .select("organisation_id, role_id, scope_kind, scope_id, resource_type")
         .eq("organisation_id", organisationId)
         .eq("membership_id", membershipId);
       failOnQueryError(error);
       const assignments = (data ?? []) as Array<{
+        organisation_id: string;
         role_id: string;
         scope_kind: "organisation" | "team" | "resource";
         scope_id: string;
         resource_type: string | null;
       }>;
       return assignments.map((assignment) => ({
+        organisationId: assignment.organisation_id,
         roleId: assignment.role_id,
         scopeKind: assignment.scope_kind,
         scopeId: assignment.scope_id,

@@ -4,6 +4,7 @@ import {
   resolveProductionWorkspaceAccess,
   type TenancyAccessReader,
 } from "@/features/tenancy/service";
+import { resolveScreenSection } from "@/lib/navigation/screen-registry";
 
 function reader(
   overrides: Partial<TenancyAccessReader> = {},
@@ -21,6 +22,7 @@ function reader(
     }),
     listAssignments: vi.fn().mockResolvedValue([
       {
+        organisationId: "organisation-riverside",
         roleId: "role-coach",
         scopeKind: "organisation",
         scopeId: "organisation-riverside",
@@ -52,6 +54,16 @@ describe("production workspace access", () => {
       membershipId: "membership-coach",
       role: "coach",
       capabilities: ["team:view", "events:view"],
+      scopedGrants: [
+        {
+          organisationId: "organisation-riverside",
+          scopeKind: "organisation",
+          scopeId: "organisation-riverside",
+          resourceType: null,
+          role: { id: "role-coach", key: "coach", label: "Coach" },
+          capabilities: ["team:view", "events:view"],
+        },
+      ],
     });
     expect(access).not.toHaveProperty("role", "platform");
   });
@@ -66,11 +78,12 @@ describe("production workspace access", () => {
     expect(access).toEqual({ status: "denied", reason: "membership" });
   });
 
-  it("denies team-only assignments at the organisation workspace boundary", async () => {
+  it("admits a team-only coach without broadening navigation beyond that role's capabilities", async () => {
     const access = await resolveProductionWorkspaceAccess(
       reader({
         listAssignments: vi.fn().mockResolvedValue([
           {
+            organisationId: "organisation-riverside",
             roleId: "role-coach",
             scopeKind: "team",
             scopeId: "team-u11",
@@ -82,6 +95,191 @@ describe("production workspace access", () => {
       "adult-coach",
     );
 
-    expect(access).toEqual({ status: "denied", reason: "capability" });
+    expect(access.status).toBe("allowed");
+    if (access.status !== "allowed") throw new Error("expected allowed access");
+    expect(
+      resolveScreenSection({
+        capabilities: access.capabilities,
+        role: access.role,
+        section: "today",
+      }),
+    ).toMatchObject({ status: "allowed" });
+    expect(
+      resolveScreenSection({
+        capabilities: access.capabilities,
+        role: access.role,
+        section: "event-editor",
+      }),
+    ).toMatchObject({ status: "denied" });
+    expect(access.scopedGrants).toEqual([
+      {
+        organisationId: "organisation-riverside",
+        scopeKind: "team",
+        scopeId: "team-u11",
+        resourceType: null,
+        role: { id: "role-coach", key: "coach", label: "Coach" },
+        capabilities: ["team:view", "events:view"],
+      },
+    ]);
+  });
+
+  it("admits a resource-only facilities role and preserves its exact resource grant", async () => {
+    const access = await resolveProductionWorkspaceAccess(
+      reader({
+        listAssignments: vi.fn().mockResolvedValue([
+          {
+            organisationId: "organisation-riverside",
+            roleId: "role-facilities",
+            scopeKind: "resource",
+            scopeId: "pitch-two",
+            resourceType: "pitch",
+          },
+        ]),
+        listRoles: vi.fn().mockResolvedValue([
+          {
+            id: "role-facilities",
+            key: "facilities-manager",
+            label: "Facilities manager",
+          },
+        ]),
+        listRolePermissions: vi.fn().mockResolvedValue([
+          { roleId: "role-facilities", capability: "pitches:inspect" },
+        ]),
+      }),
+      "riverside-juniors",
+      "adult-coach",
+    );
+
+    expect(access.status).toBe("allowed");
+    if (access.status !== "allowed") throw new Error("expected allowed access");
+    expect(
+      resolveScreenSection({
+        capabilities: access.capabilities,
+        role: access.role,
+        section: "inspections",
+      }),
+    ).toMatchObject({ status: "allowed" });
+    expect(
+      resolveScreenSection({
+        capabilities: access.capabilities,
+        role: access.role,
+        section: "maintenance",
+      }),
+    ).toMatchObject({ status: "denied" });
+    expect(access.scopedGrants).toEqual([
+      {
+        organisationId: "organisation-riverside",
+        scopeKind: "resource",
+        scopeId: "pitch-two",
+        resourceType: "pitch",
+        role: {
+          id: "role-facilities",
+          key: "facilities-manager",
+          label: "Facilities manager",
+        },
+        capabilities: ["pitches:inspect"],
+      },
+    ]);
+    expect(Object.isFrozen(access.scopedGrants)).toBe(true);
+    expect(Object.isFrozen(access.scopedGrants[0])).toBe(true);
+    expect(Object.isFrozen(access.scopedGrants[0].role)).toBe(true);
+    expect(Object.isFrozen(access.scopedGrants[0].capabilities)).toBe(true);
+  });
+
+  it("excludes cross-organisation assignments and unassigned role capabilities", async () => {
+    const access = await resolveProductionWorkspaceAccess(
+      reader({
+        listAssignments: vi.fn().mockResolvedValue([
+          {
+            organisationId: "organisation-riverside",
+            roleId: "role-coach",
+            scopeKind: "team",
+            scopeId: "team-u11",
+            resourceType: null,
+          },
+          {
+            organisationId: "organisation-northfield",
+            roleId: "role-owner",
+            scopeKind: "organisation",
+            scopeId: "organisation-northfield",
+            resourceType: null,
+          },
+        ]),
+        listRoles: vi.fn().mockResolvedValue([
+          { id: "role-coach", key: "coach", label: "Coach" },
+          { id: "role-owner", key: "owner", label: "Owner" },
+        ]),
+        listRolePermissions: vi.fn().mockResolvedValue([
+          { roleId: "role-coach", capability: "team:view" },
+          { roleId: "role-owner", capability: "club:manage" },
+        ]),
+      }),
+      "riverside-juniors",
+      "adult-coach",
+    );
+
+    expect(access.status).toBe("allowed");
+    if (access.status !== "allowed") throw new Error("expected allowed access");
+    expect(access.role).toBe("coach");
+    expect(access.capabilities).toEqual(["team:view"]);
+    expect(access.scopedGrants).toHaveLength(1);
+    expect(access.scopedGrants[0]).toMatchObject({
+      organisationId: "organisation-riverside",
+      scopeKind: "team",
+      scopeId: "team-u11",
+    });
+  });
+
+  it("does not reinterpret one same-organisation persona's capability as another persona's grant", async () => {
+    const access = await resolveProductionWorkspaceAccess(
+      reader({
+        listAssignments: vi.fn().mockResolvedValue([
+          {
+            organisationId: "organisation-riverside",
+            roleId: "role-coach",
+            scopeKind: "team",
+            scopeId: "team-u11",
+            resourceType: null,
+          },
+          {
+            organisationId: "organisation-riverside",
+            roleId: "role-auditor",
+            scopeKind: "organisation",
+            scopeId: "organisation-riverside",
+            resourceType: null,
+          },
+        ]),
+        listRoles: vi.fn().mockResolvedValue([
+          { id: "role-coach", key: "coach", label: "Coach" },
+          { id: "role-auditor", key: "auditor", label: "Auditor" },
+        ]),
+        listRolePermissions: vi.fn().mockResolvedValue([
+          { roleId: "role-coach", capability: "events:view" },
+          { roleId: "role-auditor", capability: "audit:view" },
+        ]),
+      }),
+      "riverside-juniors",
+      "adult-coach",
+    );
+
+    expect(access.status).toBe("allowed");
+    if (access.status !== "allowed") throw new Error("expected allowed access");
+    expect(access.role).toBe("club");
+    expect(access.capabilities).toEqual(["audit:view"]);
+    expect(access.scopedGrants).toHaveLength(2);
+    expect(
+      resolveScreenSection({
+        capabilities: access.capabilities,
+        role: access.role,
+        section: "audit",
+      }),
+    ).toMatchObject({ status: "allowed" });
+    expect(
+      resolveScreenSection({
+        capabilities: access.capabilities,
+        role: access.role,
+        section: "calendar",
+      }),
+    ).toMatchObject({ status: "denied" });
   });
 });
