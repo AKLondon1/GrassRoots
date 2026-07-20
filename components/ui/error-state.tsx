@@ -1,3 +1,5 @@
+"use client";
+
 import { CircleAlert } from "lucide-react";
 
 import { StateMessage, type StateMessageProps } from "@/components/ui/state-message";

@@ -49,3 +49,14 @@ test("workspace route distinguishes denied and unknown sections", async ({ page 
     /noindex/,
   );
 });
+
+test("demo policy denies a known same-role capability", async ({ page }) => {
+  await page.goto("/app/riverside-juniors/safeguarding?role=club");
+
+  await expect(
+    page.getByRole("heading", {
+      name: "Safeguarding is not available for this role",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/does not include permission/i)).toBeVisible();
+});

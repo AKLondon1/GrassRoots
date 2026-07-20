@@ -1,5 +1,8 @@
+"use client";
+
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { useId } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -26,13 +29,15 @@ function StateMessage({
   title,
   tone = "neutral",
 }: StateMessageProps) {
+  const titleId = `state-${useId()}`;
+
   return (
     <section
       className={cn(
         "flex max-w-xl flex-col items-start rounded-2xl border border-border p-6 sm:p-8",
         className,
       )}
-      aria-labelledby={`state-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+      aria-labelledby={titleId}
     >
       <span
         className={cn(
@@ -43,7 +48,7 @@ function StateMessage({
         <Icon className="size-5" aria-hidden="true" />
       </span>
       <h2
-        id={`state-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+        id={titleId}
         className="text-xl font-semibold tracking-[-0.02em] text-ink"
       >
         {title}

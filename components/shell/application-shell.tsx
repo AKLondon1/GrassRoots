@@ -18,14 +18,14 @@ import { SideNavigation } from "@/components/shell/side-navigation";
 import { Status } from "@/components/ui/status";
 import { brand } from "@/lib/brand";
 import {
-  findScreen,
-  getScreensForRole,
+  getAllowedScreensForRole,
   roleLabels,
   type AppRole,
 } from "@/lib/navigation/screen-registry";
 
 interface ApplicationShellProps {
   activeSection: string;
+  capabilities: readonly string[];
   role: AppRole;
   workspace: string;
 }
@@ -73,9 +73,15 @@ const roleDemo = {
   },
 } as const;
 
-function ApplicationShell({ activeSection, role, workspace }: ApplicationShellProps) {
-  const screens = getScreensForRole(role);
-  const currentScreen = findScreen(role, activeSection) ?? screens[0];
+function ApplicationShell({
+  activeSection,
+  capabilities,
+  role,
+  workspace,
+}: ApplicationShellProps) {
+  const screens = getAllowedScreensForRole(role, capabilities);
+  const currentScreen =
+    screens.find((screen) => screen.section === activeSection) ?? screens[0];
   const demo = roleDemo[role];
   const isDefaultScreen = currentScreen.id === screens[0].id;
 

@@ -41,6 +41,28 @@ describe("Button", () => {
 });
 
 describe("feedback primitives", () => {
+  it("gives repeated state titles unique labelled-by relationships", () => {
+    render(
+      <>
+        <EmptyState title="No fixtures yet" />
+        <EmptyState title="No fixtures yet" />
+      </>,
+    );
+
+    const regions = screen.getAllByRole("region", { name: "No fixtures yet" });
+    const labelIds = regions.map((region) =>
+      region.getAttribute("aria-labelledby"),
+    );
+
+    expect(new Set(labelIds).size).toBe(2);
+    for (const labelId of labelIds) {
+      expect(labelId).not.toBeNull();
+      expect(document.getElementById(labelId!)).toHaveTextContent(
+        "No fixtures yet",
+      );
+    }
+  });
+
   it("pairs status colour with a visible label and icon", () => {
     render(
       <Status tone="warning" icon={CircleAlert}>

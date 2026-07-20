@@ -207,8 +207,13 @@ export function getDefaultScreen(role: AppRole): ScreenDefinition {
   return screen;
 }
 
-export function getCapabilitiesForRole(role: AppRole): readonly string[] {
-  return getScreensForRole(role).map((screen) => screen.capability);
+export function getAllowedScreensForRole(
+  role: AppRole,
+  capabilities: readonly string[],
+): readonly ScreenDefinition[] {
+  return getScreensForRole(role).filter((screen) =>
+    capabilities.includes(screen.capability),
+  );
 }
 
 export function getScreenHref(

@@ -16,6 +16,12 @@ describe("workspace route states", () => {
     for (const path of expectedFiles) expect(existsSync(path)).toBe(true);
 
     expect(readFileSync(expectedFiles[0], "utf8")).toContain("DeniedState");
+    expect(readFileSync(expectedFiles[0], "utf8")).toContain(
+      "getDemoCapabilities",
+    );
+    expect(readFileSync(expectedFiles[0], "utf8")).not.toContain(
+      "getCapabilitiesForRole",
+    );
     expect(readFileSync(expectedFiles[1], "utf8")).toContain("Skeleton");
     expect(readFileSync(expectedFiles[2], "utf8")).toContain("ErrorState");
   });

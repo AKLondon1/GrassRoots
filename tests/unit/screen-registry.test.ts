@@ -15,6 +15,10 @@ const expectedScreenIds = {
 } as const;
 
 describe("screen registry", () => {
+  it("does not manufacture access policy from registered screens", () => {
+    expect("getCapabilitiesForRole" in navigation).toBe(false);
+  });
+
   it("registers the required screen families for every application role", () => {
     expect(appRoles).toEqual(["parent", "coach", "club", "platform"]);
 
