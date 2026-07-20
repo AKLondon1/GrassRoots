@@ -1,0 +1,4 @@
+interface:
+  display_name: "Glowing Effect"
+  short_description: "Add pointer-responsive glowing borders"
+  default_prompt: "Use $glowing-effect to add an accessible animated glow to this React interface."
