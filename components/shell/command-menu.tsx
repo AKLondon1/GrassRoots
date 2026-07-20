@@ -1,16 +1,22 @@
 "use client";
 
 import { Search, X } from "lucide-react";
+import Link from "next/link";
 import { useId, useState } from "react";
 
-import type { ScreenDefinition } from "@/lib/navigation/screen-registry";
+import {
+  getScreenHref,
+  type AppRole,
+  type ScreenDefinition,
+} from "@/lib/navigation/screen-registry";
 
 interface CommandMenuProps {
-  onSelect: (screenId: string) => void;
+  role: AppRole;
   screens: readonly ScreenDefinition[];
+  workspace: string;
 }
 
-function CommandMenu({ onSelect, screens }: CommandMenuProps) {
+function CommandMenu({ role, screens, workspace }: CommandMenuProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const titleId = useId();
@@ -19,8 +25,7 @@ function CommandMenu({ onSelect, screens }: CommandMenuProps) {
     screen.label.toLowerCase().includes(normalisedQuery),
   );
 
-  const chooseScreen = (screenId: string) => {
-    onSelect(screenId);
+  const closeMenu = () => {
     setOpen(false);
     setQuery("");
   };
@@ -76,16 +81,16 @@ function CommandMenu({ onSelect, screens }: CommandMenuProps) {
           <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto">
             {results.map((screen) => (
               <li key={screen.id}>
-                <button
-                  type="button"
+                <Link
+                  href={getScreenHref(workspace, screen, role)}
                   className="flex min-h-11 w-full items-center justify-between gap-4 rounded-lg px-3 text-left text-sm font-medium text-ink hover:bg-surface focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/35"
-                  onClick={() => chooseScreen(screen.id)}
+                  onClick={closeMenu}
                 >
                   <span>{screen.label}</span>
                   <span className="text-xs text-muted" aria-hidden="true">
                     {screen.componentKind}
                   </span>
-                </button>
+                </Link>
               </li>
             ))}
           </ul>

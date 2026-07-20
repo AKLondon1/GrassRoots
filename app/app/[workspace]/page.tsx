@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { ApplicationShell } from "@/components/shell/application-shell";
 import { brand } from "@/lib/brand";
+import {
+  getDefaultScreen,
+  getScreenHref,
+} from "@/lib/navigation/screen-registry";
 
 export const metadata: Metadata = {
   title: `Illustrative workspace | ${brand.name}`,
@@ -15,5 +19,5 @@ interface WorkspacePageProps {
 export default async function WorkspacePage({ params }: WorkspacePageProps) {
   const { workspace } = await params;
 
-  return <ApplicationShell workspace={workspace} />;
+  redirect(getScreenHref(workspace, getDefaultScreen("parent"), "parent"));
 }

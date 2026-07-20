@@ -10,7 +10,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 
 import { BottomNavigation } from "@/components/shell/bottom-navigation";
 import { CommandMenu } from "@/components/shell/command-menu";
@@ -26,6 +25,8 @@ import {
 } from "@/lib/navigation/screen-registry";
 
 interface ApplicationShellProps {
+  activeSection: string;
+  role: AppRole;
   workspace: string;
 }
 
@@ -72,18 +73,11 @@ const roleDemo = {
   },
 } as const;
 
-function ApplicationShell({ workspace }: ApplicationShellProps) {
-  const [role, setRole] = useState<AppRole>("parent");
+function ApplicationShell({ activeSection, role, workspace }: ApplicationShellProps) {
   const screens = getScreensForRole(role);
-  const [currentScreenId, setCurrentScreenId] = useState(screens[0].id);
-  const currentScreen = findScreen(role, currentScreenId) ?? screens[0];
+  const currentScreen = findScreen(role, activeSection) ?? screens[0];
   const demo = roleDemo[role];
   const isDefaultScreen = currentScreen.id === screens[0].id;
-
-  const changeRole = (nextRole: AppRole) => {
-    setRole(nextRole);
-    setCurrentScreenId(getScreensForRole(nextRole)[0].id);
-  };
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-surface text-ink">
@@ -104,8 +98,8 @@ function ApplicationShell({ workspace }: ApplicationShellProps) {
           </Link>
 
           <div className="flex items-center gap-2">
-            <CommandMenu screens={screens} onSelect={setCurrentScreenId} />
-            <RoleSwitcher value={role} onChange={changeRole} />
+            <CommandMenu role={role} screens={screens} workspace={workspace} />
+            <RoleSwitcher value={role} workspace={workspace} />
           </div>
         </div>
         <div className="border-t border-info/20 bg-info-soft px-4 py-2 text-center text-xs font-medium leading-5 text-info-strong sm:px-6">
@@ -121,9 +115,9 @@ function ApplicationShell({ workspace }: ApplicationShellProps) {
           </p>
           <SideNavigation
             currentScreenId={currentScreen.id}
-            onSelect={setCurrentScreenId}
             role={role}
             screens={screens}
+            workspace={workspace}
           />
         </aside>
 
@@ -212,9 +206,9 @@ function ApplicationShell({ workspace }: ApplicationShellProps) {
 
       <BottomNavigation
         currentScreenId={currentScreen.id}
-        onSelect={setCurrentScreenId}
         role={role}
         screens={screens}
+        workspace={workspace}
       />
     </div>
   );

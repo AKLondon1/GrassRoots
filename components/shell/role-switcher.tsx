@@ -1,21 +1,27 @@
 "use client";
 
 import type { ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   appRoles,
+  getDefaultScreen,
+  getScreenHref,
   roleLabels,
   type AppRole,
 } from "@/lib/navigation/screen-registry";
 
 interface RoleSwitcherProps {
   value: AppRole;
-  onChange: (role: AppRole) => void;
+  workspace: string;
 }
 
-function RoleSwitcher({ value, onChange }: RoleSwitcherProps) {
+function RoleSwitcher({ value, workspace }: RoleSwitcherProps) {
+  const router = useRouter();
+
   const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    onChange(event.target.value as AppRole);
+    const nextRole = event.target.value as AppRole;
+    router.push(getScreenHref(workspace, getDefaultScreen(nextRole), nextRole));
   };
 
   return (

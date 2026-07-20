@@ -8,9 +8,11 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 
 import {
   roleLabels,
+  getScreenHref,
   type AppRole,
   type ScreenComponentKind,
   type ScreenDefinition,
@@ -19,9 +21,9 @@ import { cn } from "@/lib/utils";
 
 interface SideNavigationProps {
   currentScreenId: string;
-  onSelect: (screenId: string) => void;
   role: AppRole;
   screens: readonly ScreenDefinition[];
+  workspace: string;
 }
 
 const kindIcons: Record<ScreenComponentKind, LucideIcon> = {
@@ -39,9 +41,9 @@ const kindIcons: Record<ScreenComponentKind, LucideIcon> = {
 
 function SideNavigation({
   currentScreenId,
-  onSelect,
   role,
   screens,
+  workspace,
 }: SideNavigationProps) {
   return (
     <nav aria-label={`${roleLabels[role]} navigation`} className="h-full">
@@ -55,8 +57,8 @@ function SideNavigation({
 
           return (
             <li key={screen.id}>
-              <button
-                type="button"
+              <Link
+                href={getScreenHref(workspace, screen, role)}
                 className={cn(
                   "flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 text-left text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/35",
                   active
@@ -64,11 +66,10 @@ function SideNavigation({
                     : "text-muted hover:bg-surface-strong hover:text-ink",
                 )}
                 aria-current={active ? "page" : undefined}
-                onClick={() => onSelect(screen.id)}
               >
                 <Icon className="size-4 shrink-0" aria-hidden="true" />
                 <span>{screen.label}</span>
-              </button>
+              </Link>
             </li>
           );
         })}

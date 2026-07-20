@@ -28,6 +28,8 @@ export interface ScreenDefinition {
   id: string;
   label: string;
   role: AppRole;
+  section: string;
+  path: `/app/[workspace]/${string}`;
   capability: `${string}:${string}`;
   componentKind: ScreenComponentKind;
   states: ScreenStateCopy;
@@ -53,6 +55,8 @@ function defineScreen(
     id,
     label,
     role,
+    section: id,
+    path: `/app/[workspace]/${id}`,
     capability,
     componentKind,
     states: {
@@ -161,4 +165,61 @@ export function findScreen(
   return screenRegistry.find(
     (screen) => screen.role === role && screen.id === screenId,
   );
+}
+
+export type ScreenResolution =
+  | { status: "allowed"; screen: ScreenDefinition }
+  | { status: "denied"; screen: ScreenDefinition }
+  | { status: "unknown" };
+
+interface ResolveScreenSectionInput {
+  capabilities: readonly string[];
+  role: AppRole;
+  section: string;
+}
+
+export function resolveScreenSection({
+  capabilities,
+  role,
+  section,
+}: ResolveScreenSectionInput): ScreenResolution {
+  const matchingScreens = screenRegistry.filter(
+    (screen) => screen.section === section,
+  );
+
+  if (matchingScreens.length === 0) return { status: "unknown" };
+
+  const roleScreen = matchingScreens.find((screen) => screen.role === role);
+  if (!roleScreen) {
+    return { status: "denied", screen: matchingScreens[0] };
+  }
+
+  if (!capabilities.includes(roleScreen.capability)) {
+    return { status: "denied", screen: roleScreen };
+  }
+
+  return { status: "allowed", screen: roleScreen };
+}
+
+export function getDefaultScreen(role: AppRole): ScreenDefinition {
+  const screen = getScreensForRole(role)[0];
+  if (!screen) throw new Error(`No default screen is registered for ${role}.`);
+  return screen;
+}
+
+export function getCapabilitiesForRole(role: AppRole): readonly string[] {
+  return getScreensForRole(role).map((screen) => screen.capability);
+}
+
+export function getScreenHref(
+  workspace: string,
+  screen: ScreenDefinition,
+  role: AppRole = screen.role,
+): string {
+  const path = screen.path.replace("[workspace]", encodeURIComponent(workspace));
+  return `${path}?role=${role}`;
+}
+
+export function parseAppRole(value: string | undefined): AppRole {
+  return appRoles.find((role) => role === value) ?? "parent";
 }
