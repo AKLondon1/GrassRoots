@@ -10,5 +10,6 @@ describe("securityHeaders", () => {
     expect(names).toContain("referrer-policy");
     expect(names).toContain("x-content-type-options");
     expect(names).toContain("permissions-policy");
+    expect(names).toContain("strict-transport-security");
   });
 });

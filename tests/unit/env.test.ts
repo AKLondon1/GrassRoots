@@ -24,4 +24,10 @@ describe("parseEnvironment", () => {
 
     expect(parsed.public).not.toHaveProperty("SUPABASE_SERVICE_ROLE_KEY");
   });
+
+  it("requires an explicit data mode for production builds", () => {
+    expect(() => parseEnvironment({ NODE_ENV: "production" })).toThrow(
+      /explicit data mode/,
+    );
+  });
 });

@@ -12,6 +12,7 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:permissions": "vitest run tests/security",
+    "test:pwa": "vitest run tests/unit/pwa.test.ts",
     "test:a11y": "playwright test tests/e2e/accessibility.spec.ts",
     "test:e2e": "playwright test"
   },
