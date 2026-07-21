@@ -71,6 +71,33 @@ values (
   '00000000-0000-4000-8000-000000004001'
 );
 
+insert into public.seasons (id, organisation_id, name, starts_on, ends_on)
+values (
+  '00000000-0000-4000-8000-000000007000',
+  '00000000-0000-4000-8000-000000001001',
+  'Permission test season',
+  '2026-08-01',
+  '2027-05-31'
+);
+
+insert into public.age_groups (id, organisation_id, name, minimum_age, maximum_age)
+values (
+  '00000000-0000-4000-8000-000000007010',
+  '00000000-0000-4000-8000-000000001001',
+  'Permission test age group',
+  9,
+  11
+);
+
+insert into public.teams (id, organisation_id, season_id, age_group_id, name)
+values (
+  '00000000-0000-4000-8000-000000007001',
+  '00000000-0000-4000-8000-000000001001',
+  '00000000-0000-4000-8000-000000007000',
+  '00000000-0000-4000-8000-000000007010',
+  'Permission test team'
+);
+
 insert into public.scoped_role_assignments (
   id,
   organisation_id,

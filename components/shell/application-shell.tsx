@@ -10,6 +10,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { BottomNavigation } from "@/components/shell/bottom-navigation";
 import { CommandMenu } from "@/components/shell/command-menu";
@@ -26,6 +27,7 @@ import {
 interface ApplicationShellProps {
   activeSection: string;
   capabilities: readonly string[];
+  children?: ReactNode;
   isDemo?: boolean;
   role: AppRole;
   workspace: string;
@@ -77,6 +79,7 @@ const roleDemo = {
 function ApplicationShell({
   activeSection,
   capabilities,
+  children,
   isDemo = true,
   role,
   workspace,
@@ -150,7 +153,7 @@ function ApplicationShell({
               </Status>
             </div>
 
-            <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.55fr)]">
+            {children ? <div className="mt-8">{children}</div> : <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.55fr)]">
               <section
                 className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"
                 aria-labelledby="shell-focus-title"
@@ -213,7 +216,7 @@ function ApplicationShell({
                   </p>
                 </div>
               </aside>
-            </div>
+            </div>}
           </div>
         </main>
       </div>

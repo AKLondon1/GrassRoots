@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
+import { PeopleSetup } from "@/components/admin/people-setup";
 import { ApplicationShell } from "@/components/shell/application-shell";
 import { DeniedState } from "@/components/ui/denied-state";
 import {
@@ -99,6 +100,10 @@ export default async function WorkspaceSectionPage({
       isDemo={environment.dataMode === "demo"}
       role={role}
       workspace={workspace}
-    />
+    >
+      {environment.dataMode === "demo" && role === "club" && section === "people" ? (
+        <PeopleSetup />
+      ) : null}
+    </ApplicationShell>
   );
 }
