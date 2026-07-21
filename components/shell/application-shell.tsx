@@ -109,7 +109,7 @@ function ApplicationShell({
           </Link>
 
           <div className="flex items-center gap-2">
-            <CommandMenu role={role} screens={screens} workspace={workspace} />
+            <CommandMenu isDemo={isDemo} role={role} screens={screens} workspace={workspace} />
             {isDemo ? <RoleSwitcher value={role} workspace={workspace} /> : null}
           </div>
         </div>

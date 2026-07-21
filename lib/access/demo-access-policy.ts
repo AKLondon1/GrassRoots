@@ -53,6 +53,8 @@ const demoCapabilitiesByRole = {
     "compliance:manage",
     "reports:view",
     "audit:view",
+    "support:request",
+    "volunteers:manage",
     "club:manage",
     "integrations:manage",
     "entitlements:view",

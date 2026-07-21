@@ -45,7 +45,10 @@ values
   ('00000000-0000-4000-8000-000000000f02', '00000000-0000-4000-8000-000000000101', 'coach', 'Coach'),
   ('00000000-0000-4000-8000-000000000f03', '00000000-0000-4000-8000-000000000101', 'club-admin', 'Club administrator'),
   ('00000000-0000-4000-8000-000000000f04', '00000000-0000-4000-8000-000000000101', 'platform-operator', 'Platform operator'),
-  ('00000000-0000-4000-8000-000000000f05', '00000000-0000-4000-8000-000000000101', 'manager', 'Team manager')
+  ('00000000-0000-4000-8000-000000000f05', '00000000-0000-4000-8000-000000000101', 'manager', 'Team manager'),
+  ('00000000-0000-4000-8000-000000000f06', '00000000-0000-4000-8000-000000000101', 'pitch-admin', 'Pitch administrator'),
+  ('00000000-0000-4000-8000-000000000f07', '00000000-0000-4000-8000-000000000101', 'facilities-admin', 'Facilities administrator'),
+  ('00000000-0000-4000-8000-000000000f08', '00000000-0000-4000-8000-000000000101', 'fixture-secretary', 'Fixture secretary')
 on conflict (id) do nothing;
 
 insert into public.role_permissions (organisation_id, role_id, permission_id)
@@ -111,7 +114,10 @@ values
   ('00000000-0000-4000-8000-000000001002', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000f02', 'team', '00000000-0000-4000-8000-000000000802'),
   ('00000000-0000-4000-8000-000000001003', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000f03', 'organisation', '00000000-0000-4000-8000-000000000101'),
   ('00000000-0000-4000-8000-000000001004', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000304', '00000000-0000-4000-8000-000000000f04', 'organisation', '00000000-0000-4000-8000-000000000101'),
-  ('00000000-0000-4000-8000-000000001005', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000305', '00000000-0000-4000-8000-000000000f01', 'organisation', '00000000-0000-4000-8000-000000000101')
+  ('00000000-0000-4000-8000-000000001005', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000305', '00000000-0000-4000-8000-000000000f01', 'organisation', '00000000-0000-4000-8000-000000000101'),
+  ('00000000-0000-4000-8000-000000001006', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000f06', 'organisation', '00000000-0000-4000-8000-000000000101'),
+  ('00000000-0000-4000-8000-000000001007', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000f07', 'organisation', '00000000-0000-4000-8000-000000000101'),
+  ('00000000-0000-4000-8000-000000001008', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000f08', 'organisation', '00000000-0000-4000-8000-000000000101')
 on conflict (id) do nothing;
 
 insert into public.players (id, organisation_id, first_name, last_name, date_of_birth)
@@ -157,6 +163,99 @@ on conflict (id) do nothing;
 
 insert into public.coaches (id, organisation_id, membership_id, display_name)
 values ('00000000-0000-4000-8000-000000000a01', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000302', 'Sam Taylor')
+on conflict (id) do nothing;
+
+-- Fictional facility and club-operations records for the Riverside Juniors demo.
+insert into public.venues (id, organisation_id, name, address, time_zone, step_free_access)
+values ('00000000-0000-4000-8000-000000002001', '00000000-0000-4000-8000-000000000101', 'Riverside Sports Ground', 'Mill Lane, Riverside', 'Europe/London', true)
+on conflict (id) do nothing;
+
+insert into public.facilities (id, organisation_id, venue_id, name, kind)
+values
+  ('00000000-0000-4000-8000-000000002011', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002001', 'Main pitch', 'pitch'),
+  ('00000000-0000-4000-8000-000000002012', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002001', 'Pitch 2', 'pitch'),
+  ('00000000-0000-4000-8000-000000002013', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002001', 'Training area', 'training-area')
+on conflict (id) do nothing;
+
+insert into public.reservation_units (id, organisation_id, facility_id, parent_unit_id, name, capacity, accessible, floodlit)
+values
+  ('00000000-0000-4000-8000-000000002021', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002011', null, 'Main pitch', 22, true, false),
+  ('00000000-0000-4000-8000-000000002022', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002011', '00000000-0000-4000-8000-000000002021', 'Main pitch · half A', 12, true, false),
+  ('00000000-0000-4000-8000-000000002023', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002011', '00000000-0000-4000-8000-000000002021', 'Main pitch · half B', 12, true, false),
+  ('00000000-0000-4000-8000-000000002024', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002012', null, 'Pitch 2', 18, true, true),
+  ('00000000-0000-4000-8000-000000002025', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002013', null, 'Training area', 10, false, true)
+on conflict (id) do nothing;
+
+insert into public.reservation_unit_exclusions (id, organisation_id, reservation_unit_id, excluded_unit_id, reason)
+values ('00000000-0000-4000-8000-000000002031', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002024', '00000000-0000-4000-8000-000000002025', 'Shared safety run-off area')
+on conflict (id) do nothing;
+
+insert into public.facility_bookings (id, organisation_id, reservation_unit_id, event_instance_id, title, starts_at, ends_at, buffer_before_minutes, buffer_after_minutes, created_by_membership_id)
+values ('00000000-0000-4000-8000-000000002041', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002021', null, 'Under 11s v Meadow Park Juniors', '2026-08-09T09:00:00Z', '2026-08-09T10:30:00Z', 15, 20, '00000000-0000-4000-8000-000000000303')
+on conflict (id) do nothing;
+
+insert into public.facility_inspections (id, organisation_id, reservation_unit_id, inspected_by_membership_id, inspected_at, outcome, notes)
+values ('00000000-0000-4000-8000-000000002051', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002021', '00000000-0000-4000-8000-000000000303', '2026-07-21T07:40:00Z', 'monitor', 'Waterlogged area near the south touchline; goals secure and access route clear.')
+on conflict (id) do nothing;
+
+insert into public.maintenance_requests (id, organisation_id, facility_id, title, description, priority, status, assigned_membership_id, due_on)
+values ('00000000-0000-4000-8000-000000002061', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002011', 'Repair drainage channel', 'Clear and repair the south-side drainage channel.', 'high', 'planned', '00000000-0000-4000-8000-000000000303', '2026-08-01')
+on conflict (id) do nothing;
+
+insert into public.club_documents (id, organisation_id, title, required_capability, current_version)
+values ('00000000-0000-4000-8000-000000002071', '00000000-0000-4000-8000-000000000101', 'Pitch allocation policy', 'documents:manage', 3)
+on conflict (id) do nothing;
+
+insert into public.club_document_versions (id, organisation_id, document_id, version, storage_path, checksum, created_by_membership_id)
+values ('00000000-0000-4000-8000-000000002072', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002071', 3, 'demo/riverside/pitch-allocation-v3.pdf', 'demo-checksum-v3', '00000000-0000-4000-8000-000000000303')
+on conflict (id) do nothing;
+
+insert into public.equipment_items (id, organisation_id, name, quantity, asset_tag)
+values ('00000000-0000-4000-8000-000000002081', '00000000-0000-4000-8000-000000000101', 'Under 11 match shirts', 18, 'KIT-U11-HOME')
+on conflict (id) do nothing;
+
+insert into public.equipment_reservations (id, organisation_id, equipment_item_id, event_id, quantity, starts_at, ends_at)
+values ('00000000-0000-4000-8000-000000002082', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002081', null, 18, '2026-08-09T08:15:00Z', '2026-08-09T11:00:00Z')
+on conflict (id) do nothing;
+
+insert into public.volunteer_shifts (id, organisation_id, event_id, title, starts_at, ends_at, required_people)
+values ('00000000-0000-4000-8000-000000002091', '00000000-0000-4000-8000-000000000101', null, 'Match-day welcome desk', '2026-08-09T08:30:00Z', '2026-08-09T09:15:00Z', 1)
+on conflict (id) do nothing;
+
+insert into public.facility_blocks (id, organisation_id, reservation_unit_id, starts_at, ends_at, reason)
+values ('00000000-0000-4000-8000-000000002101', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002025', '2026-07-25T07:00:00Z', '2026-07-25T09:00:00Z', 'Council grounds work')
+on conflict (id) do nothing;
+
+insert into public.facility_closures (id, organisation_id, reservation_unit_id, inspection_id, starts_at, ends_at, reason, closed_by_membership_id)
+values ('00000000-0000-4000-8000-000000002109', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002021', '00000000-0000-4000-8000-000000002051', '2026-07-21T07:45:00Z', '2026-07-21T12:00:00Z', 'Waterlogged south touchline', '00000000-0000-4000-8000-000000000303')
+on conflict (id) do nothing;
+
+insert into public.facility_assets (id, organisation_id, facility_id, name, asset_tag, condition)
+values ('00000000-0000-4000-8000-000000002102', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002011', 'Portable goals', 'GOALS-MAIN-01', 'good')
+on conflict (id) do nothing;
+
+insert into public.external_hires (id, organisation_id, venue_id, supplier_name, reference, cost_pence, status)
+values ('00000000-0000-4000-8000-000000002103', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002001', 'Riverside Community Trust', '3G-AUG-09', 8500, 'requested')
+on conflict (id) do nothing;
+
+insert into public.volunteer_shift_assignments (id, organisation_id, shift_id, membership_id, status)
+values ('00000000-0000-4000-8000-000000002104', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002091', '00000000-0000-4000-8000-000000000303', 'offered')
+on conflict (id) do nothing;
+
+insert into public.support_requests (id, organisation_id, requested_by_membership_id, subject, description, authorised_resources, status)
+values ('00000000-0000-4000-8000-000000002105', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000303', 'Booking relocation help', 'Please investigate fictional booking GR-18.', '[{"type":"facility_booking","id":"00000000-0000-4000-8000-000000002041"}]', 'investigating')
+on conflict (id) do nothing;
+
+insert into public.support_sessions (id, organisation_id, support_request_id, operator_membership_id, reason, starts_at, expires_at, allowed_resources, allowed_resource_ids)
+values ('00000000-0000-4000-8000-000000002106', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002105', '00000000-0000-4000-8000-000000000304', 'Investigate fictional booking reference GR-18', '2026-07-21T09:00:00Z', '2026-07-21T09:30:00Z', array['facility_booking'], array['00000000-0000-4000-8000-000000002041'::uuid])
+on conflict (id) do nothing;
+
+insert into public.export_audit (id, organisation_id, actor_membership_id, format, resource_type, watermark, row_count, created_at)
+values ('00000000-0000-4000-8000-000000002107', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000303', 'csv', 'pitch-allocation', 'GrassRoots · Riverside Juniors · Confidential club export', 1, '2026-07-21T08:50:00Z')
+on conflict (id) do nothing;
+
+insert into public.audit_log (id, organisation_id, actor_membership_id, action, resource_type, resource_id, reason, metadata, created_at)
+values ('00000000-0000-4000-8000-000000002108', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000303', 'facility.inspection.recorded', 'facility_inspection', '00000000-0000-4000-8000-000000002051', 'Routine fictional demo inspection', '{}', '2026-07-21T07:40:00Z')
 on conflict (id) do nothing;
 
 insert into public.volunteers (id, organisation_id, membership_id, display_name, kind)
@@ -331,3 +430,9 @@ values (
   'Alex phone calendar'
 )
 on conflict (id) do nothing;
+
+-- Link the earlier facility reservation after its canonical event instance exists.
+update public.facility_bookings
+set event_instance_id = '00000000-0000-4000-8000-000000001202'
+where id = '00000000-0000-4000-8000-000000002041'
+  and organisation_id = '00000000-0000-4000-8000-000000000101';
