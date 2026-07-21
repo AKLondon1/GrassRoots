@@ -52,16 +52,29 @@ insert into public.role_permissions (organisation_id, role_id, permission_id)
 select '00000000-0000-4000-8000-000000000101', role.id, permission.id
 from public.roles role
 join public.permissions permission on (
-  (role.key = 'guardian' and permission.key in ('household:manage', 'team:view'))
-  or (role.key = 'coach' and permission.key in ('players:view', 'team:view', 'volunteers:view'))
+  (role.key = 'guardian' and permission.key in (
+    'announcements:view', 'availability:respond', 'calendar:manage', 'events:view',
+    'household:manage', 'polls:respond', 'squads:respond', 'squads:view', 'team:view'
+  ))
+  or (role.key = 'coach' and permission.key in (
+    'announcements:view', 'availability:manage', 'attendance:manage', 'events:manage',
+    'events:view', 'players:view', 'polls:manage', 'polls:respond', 'squads:manage',
+    'squads:view', 'team:view', 'volunteers:view'
+  ))
   or (role.key = 'club-admin' and permission.key in (
     'club:manage', 'household:manage', 'invitations:manage', 'memberships:manage',
     'memberships:view', 'opposition:manage', 'people:manage', 'players:view',
     'roles:manage', 'seasons:manage', 'settings:manage', 'team:view',
-    'teams:manage', 'volunteers:view'
+    'teams:manage', 'volunteers:view', 'announcements:view', 'availability:manage',
+    'availability:respond', 'attendance:manage', 'calendar:manage', 'events:manage',
+    'events:view', 'polls:manage', 'polls:respond', 'squads:manage',
+    'squads:respond', 'squads:view'
   ))
   or (role.key = 'manager' and permission.key in (
-    'invitations:manage', 'players:view', 'team:view', 'teams:manage', 'volunteers:view'
+    'announcements:view', 'availability:manage', 'attendance:manage', 'events:manage',
+    'events:view', 'invitations:manage', 'players:view', 'polls:manage',
+    'polls:respond', 'squads:manage', 'squads:view', 'team:view', 'teams:manage',
+    'volunteers:view'
   ))
 )
 where role.organisation_id = '00000000-0000-4000-8000-000000000101'
@@ -177,5 +190,144 @@ values (
   '00000000-0000-4000-8000-000000000801',
   'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
   '2099-12-31T23:59:59Z'
+)
+on conflict (id) do nothing;
+
+insert into public.events (
+  id, organisation_id, team_id, kind, title, default_location_name,
+  created_by_membership_id
+)
+values
+  ('00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000802', 'training', 'Under 11s training', 'Riverside Sports Ground · Pitch 2', '00000000-0000-4000-8000-000000000302'),
+  ('00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000802', 'match', 'Under 11s v Meadow Park Juniors', 'Riverside Sports Ground · Main pitch', '00000000-0000-4000-8000-000000000302')
+on conflict (id) do nothing;
+
+insert into public.event_series (
+  id, organisation_id, event_id, team_id, time_zone, recurrence_rule,
+  starts_at, ends_at, until_at
+)
+values (
+  '00000000-0000-4000-8000-000000001211',
+  '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000001201',
+  '00000000-0000-4000-8000-000000000802',
+  'Europe/London',
+  '{"frequency":"weekly","interval":1,"localTime":"09:30"}',
+  '2026-08-02T08:30:00Z',
+  '2026-08-02T10:00:00Z',
+  '2026-09-27T08:30:00Z'
+)
+on conflict (id) do nothing;
+
+insert into public.event_instances (
+  id, organisation_id, event_id, series_id, team_id, starts_at, ends_at,
+  response_deadline, location_name, status
+)
+values
+  ('00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000001211', '00000000-0000-4000-8000-000000000802', '2026-08-02T08:30:00Z', '2026-08-02T10:00:00Z', '2026-07-30T17:00:00Z', 'Riverside Sports Ground · Pitch 2', 'scheduled'),
+  ('00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', null, '00000000-0000-4000-8000-000000000802', '2026-08-09T09:00:00Z', '2026-08-09T10:30:00Z', '2026-08-05T18:00:00Z', 'Riverside Sports Ground · Main pitch', 'scheduled'),
+  ('00000000-0000-4000-8000-000000001203', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000001211', '00000000-0000-4000-8000-000000000802', '2026-08-16T09:30:00Z', '2026-08-16T11:00:00Z', '2026-08-13T17:00:00Z', 'Riverside Sports Ground · Pitch 3', 'scheduled')
+on conflict (id) do nothing;
+
+insert into public.event_exceptions (
+  id, organisation_id, series_id, team_id, original_starts_at,
+  replacement_instance_id, patch
+)
+values (
+  '00000000-0000-4000-8000-000000001213',
+  '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000001211',
+  '00000000-0000-4000-8000-000000000802',
+  '2026-08-16T08:30:00Z',
+  '00000000-0000-4000-8000-000000001203',
+  '{"startsAt":"2026-08-16T09:30:00Z","locationName":"Riverside Sports Ground · Pitch 3"}'
+)
+on conflict (organisation_id, series_id, original_starts_at) do nothing;
+
+insert into public.availability_responses (
+  id, organisation_id, event_instance_id, team_id, player_id, guardian_id,
+  status, idempotency_key, responded_at
+)
+values
+  ('00000000-0000-4000-8000-000000001221', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601', '00000000-0000-4000-8000-000000000401', 'available', 'demo-jamie-match-availability', '2026-07-20T18:05:00Z'),
+  ('00000000-0000-4000-8000-000000001222', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603', '00000000-0000-4000-8000-000000000403', 'unsure', 'demo-rowan-match-availability', '2026-07-20T19:10:00Z')
+on conflict (id) do nothing;
+
+insert into public.polls (
+  id, organisation_id, team_id, title, status, closes_at, created_by_membership_id
+)
+values (
+  '00000000-0000-4000-8000-000000001301',
+  '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000000802',
+  'September training time', 'open', '2026-07-24T18:00:00Z',
+  '00000000-0000-4000-8000-000000000302'
+)
+on conflict (id) do nothing;
+
+insert into public.poll_options (
+  id, organisation_id, poll_id, team_id, starts_at, ends_at, pitch_capacity
+)
+values
+  ('00000000-0000-4000-8000-000000001311', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', '2026-09-05T08:00:00Z', '2026-09-05T09:30:00Z', 10),
+  ('00000000-0000-4000-8000-000000001312', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', '2026-09-05T10:00:00Z', '2026-09-05T11:30:00Z', 9),
+  ('00000000-0000-4000-8000-000000001313', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', '2026-09-05T16:00:00Z', '2026-09-05T17:30:00Z', 7)
+on conflict (id) do nothing;
+
+insert into public.squads (
+  id, organisation_id, event_instance_id, team_id, status, published_at,
+  published_by_membership_id
+)
+values (
+  '00000000-0000-4000-8000-000000001401',
+  '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000001202',
+  '00000000-0000-4000-8000-000000000802',
+  'published', '2026-07-20T20:00:00Z',
+  '00000000-0000-4000-8000-000000000302'
+)
+on conflict (id) do nothing;
+
+insert into public.squad_members (
+  id, organisation_id, squad_id, team_id, player_id, status, position_order
+)
+values
+  ('00000000-0000-4000-8000-000000001402', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601', 'selected', 1),
+  ('00000000-0000-4000-8000-000000001403', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603', 'standby', 1)
+on conflict (id) do nothing;
+
+insert into public.squad_history (
+  id, organisation_id, squad_id, squad_member_id, team_id, player_id,
+  previous_status, next_status, reason, changed_by_membership_id, changed_at
+)
+values
+  ('00000000-0000-4000-8000-000000001411', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401', '00000000-0000-4000-8000-000000001402', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601', null, 'selected', 'Initial publication', '00000000-0000-4000-8000-000000000302', '2026-07-20T20:00:00Z'),
+  ('00000000-0000-4000-8000-000000001412', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401', '00000000-0000-4000-8000-000000001403', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603', null, 'standby', 'Initial publication', '00000000-0000-4000-8000-000000000302', '2026-07-20T20:00:00Z')
+on conflict (id) do nothing;
+
+insert into public.standby_replacements (
+  id, organisation_id, squad_id, team_id, withdrawn_player_id,
+  standby_player_id, status, expires_at
+)
+values (
+  '00000000-0000-4000-8000-000000001421',
+  '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000001401',
+  '00000000-0000-4000-8000-000000000802',
+  '00000000-0000-4000-8000-000000000601',
+  '00000000-0000-4000-8000-000000000603',
+  'offered', '2026-08-07T18:00:00Z'
+)
+on conflict (id) do nothing;
+
+insert into public.private_calendar_tokens (
+  id, organisation_id, membership_id, token_digest, label
+)
+values (
+  '00000000-0000-4000-8000-000000001501',
+  '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000000301',
+  'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  'Alex phone calendar'
 )
 on conflict (id) do nothing;

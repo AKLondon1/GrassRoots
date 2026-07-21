@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { PeopleSetup } from "@/components/admin/people-setup";
 import { ApplicationShell } from "@/components/shell/application-shell";
 import { DeniedState } from "@/components/ui/denied-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   createSupabaseTenancyAccessReader,
   resolveProductionWorkspaceAccess,
@@ -18,6 +20,8 @@ import {
   type AppRole,
 } from "@/lib/navigation/screen-registry";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { CoachCoreFootballScreen } from "@/features/screens/coach/core-football";
+import { ParentCoreFootballScreen } from "@/features/screens/parent/core-football";
 
 export const metadata: Metadata = {
   title: `Illustrative workspace | ${brand.name}`,
@@ -93,6 +97,27 @@ export default async function WorkspaceSectionPage({
     );
   }
 
+  const parentCoreSections = new Set(["actions", "schedule", "event", "availability", "polls", "squad", "announcements"]);
+  const coachCoreSections = new Set(["today", "calendar", "event-editor", "availability", "squad"]);
+  const isCoreFootballSection =
+    (role === "parent" && parentCoreSections.has(section)) ||
+    (role === "coach" && coachCoreSections.has(section));
+  let screenContent: ReactNode;
+  if (environment.dataMode === "demo" && role === "club" && section === "people") {
+    screenContent = <PeopleSetup />;
+  } else if (environment.dataMode === "demo" && role === "parent" && parentCoreSections.has(section)) {
+    screenContent = <ParentCoreFootballScreen section={section} />;
+  } else if (environment.dataMode === "demo" && role === "coach" && coachCoreSections.has(section)) {
+    screenContent = <CoachCoreFootballScreen section={section} />;
+  } else if (environment.dataMode !== "demo" && isCoreFootballSection) {
+    screenContent = (
+      <EmptyState
+        title={resolution.screen.states.empty.title}
+        description="No scoped organisation event data is available for this screen yet. Create or publish the relevant team record to continue."
+      />
+    );
+  }
+
   return (
     <ApplicationShell
       activeSection={resolution.screen.section}
@@ -101,9 +126,7 @@ export default async function WorkspaceSectionPage({
       role={role}
       workspace={workspace}
     >
-      {environment.dataMode === "demo" && role === "club" && section === "people" ? (
-        <PeopleSetup />
-      ) : null}
+      {screenContent}
     </ApplicationShell>
   );
 }

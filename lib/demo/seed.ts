@@ -4,6 +4,8 @@ import type {
   Player,
   PlayerGuardian,
 } from "@/features/households/types";
+import { calendarTokenHash } from "@/features/events/service";
+import { riversideDemoCalendarToken } from "@/lib/demo/calendar-token";
 
 export const riversideDemoIds = {
   organisation: "00000000-0000-4000-8000-000000000101",
@@ -44,7 +46,19 @@ export const riversideDemoIds = {
     under7: "00000000-0000-4000-8000-000000000801",
     under11: "00000000-0000-4000-8000-000000000802",
   },
+  events: {
+    training: "00000000-0000-4000-8000-000000001201",
+    match: "00000000-0000-4000-8000-000000001202",
+  },
+  series: {
+    training: "00000000-0000-4000-8000-000000001211",
+  },
+  poll: "00000000-0000-4000-8000-000000001301",
+  squad: "00000000-0000-4000-8000-000000001401",
+  calendarToken: "00000000-0000-4000-8000-000000001501",
 } as const;
+
+export { riversideDemoCalendarToken } from "@/lib/demo/calendar-token";
 
 export interface DemoOrganisation {
   readonly id: string;
@@ -141,6 +155,125 @@ export interface RiversideDemoSeed {
   readonly volunteers: readonly DemoVolunteer[];
   readonly oppositionContacts: readonly DemoOppositionContact[];
   readonly managerInvitations: readonly DemoManagerInvitation[];
+  readonly events: readonly DemoEvent[];
+  readonly eventChangeSummaries: readonly DemoEventChangeSummary[];
+  readonly availabilityResponses: readonly DemoAvailabilityResponse[];
+  readonly polls: readonly DemoPoll[];
+  readonly squads: readonly DemoSquad[];
+  readonly squadHistory: readonly DemoSquadHistory[];
+  readonly standbyReplacements: readonly DemoStandbyReplacement[];
+  readonly notifications: readonly DemoNotification[];
+  readonly calendarTokens: readonly DemoCalendarToken[];
+}
+
+export interface DemoEvent {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly teamId: string;
+  readonly seriesId: string | null;
+  readonly kind: "training" | "match";
+  readonly title: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly responseDeadline: string;
+  readonly locationName: string;
+  readonly status: "scheduled" | "cancelled" | "completed";
+  readonly opponent?: string;
+}
+
+export interface DemoEventChangeSummary {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly seriesId: string;
+  readonly editScope: "this" | "this-and-future" | "all";
+  readonly occurrenceStartsAt: string;
+  readonly changedAt: string;
+}
+
+export interface DemoAvailabilityResponse {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly eventId: string;
+  readonly teamId: string;
+  readonly playerId: string;
+  readonly guardianId: string;
+  readonly status: "available" | "unavailable" | "unsure";
+  readonly respondedAt: string;
+}
+
+export interface DemoPoll {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly teamId: string;
+  readonly title: string;
+  readonly status: "open" | "converted";
+  readonly convertedSeriesId?: string;
+  readonly conversionIdempotencyKey?: string;
+  readonly closesAt: string;
+  readonly options: readonly {
+    id: string;
+    startsAt: string;
+    endsAt: string;
+    availableRespondents: number;
+    pitchCapacity: number;
+  }[];
+}
+
+export interface DemoSquad {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly teamId: string;
+  readonly eventId: string;
+  readonly status: "published";
+  readonly publishedAt: string;
+  readonly members: readonly {
+    playerId: string;
+    status: "selected" | "standby";
+    recentSelections: number;
+    recentMinutes: number;
+  }[];
+}
+
+export interface DemoNotification {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly householdId: string;
+  readonly eventId: string;
+  readonly template: string;
+  readonly scheduledFor: string;
+  readonly deliveryStatus: "not-sent";
+  readonly provider: "development-outbox";
+}
+
+export interface DemoSquadHistory {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly squadId: string;
+  readonly playerId: string;
+  readonly previousStatus: "selected" | "standby" | null;
+  readonly nextStatus: "selected" | "standby" | "withdrawn";
+  readonly reason: string;
+  readonly changedAt: string;
+}
+
+export interface DemoStandbyReplacement {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly teamId: string;
+  readonly squadId: string;
+  readonly withdrawnPlayerId: string;
+  readonly standbyPlayerId: string;
+  readonly status: "offered" | "accepted" | "declined" | "expired";
+  readonly expiresAt: string;
+  readonly respondedAt?: string;
+}
+
+export interface DemoCalendarToken {
+  readonly id: string;
+  readonly organisationId: string;
+  readonly membershipId: string;
+  readonly tokenHash: string;
+  readonly revokedAt: string | null;
 }
 
 const organisationId = riversideDemoIds.organisation;
@@ -411,6 +544,142 @@ const seed: RiversideDemoSeed = {
       email: "manager.under7@example.test",
       role: "manager",
       deliveryStatus: "not-sent",
+    },
+  ],
+  events: [
+    {
+      id: riversideDemoIds.events.training,
+      organisationId,
+      teamId: riversideDemoIds.teams.under11,
+      seriesId: riversideDemoIds.series.training,
+      kind: "training",
+      title: "Under 11s training",
+      startsAt: "2026-08-02T08:30:00.000Z",
+      endsAt: "2026-08-02T10:00:00.000Z",
+      responseDeadline: "2026-07-30T17:00:00.000Z",
+      locationName: "Riverside Sports Ground · Pitch 2",
+      status: "scheduled",
+    },
+    {
+      id: riversideDemoIds.events.match,
+      organisationId,
+      teamId: riversideDemoIds.teams.under11,
+      seriesId: null,
+      kind: "match",
+      title: "Under 11s v Meadow Park Juniors",
+      startsAt: "2026-08-09T09:00:00.000Z",
+      endsAt: "2026-08-09T10:30:00.000Z",
+      responseDeadline: "2026-08-05T18:00:00.000Z",
+      locationName: "Riverside Sports Ground · Main pitch",
+      status: "scheduled",
+      opponent: "Meadow Park Juniors",
+    },
+  ],
+  eventChangeSummaries: [],
+  availabilityResponses: [
+    {
+      id: "00000000-0000-4000-8000-000000001221",
+      organisationId,
+      eventId: riversideDemoIds.events.match,
+      teamId: riversideDemoIds.teams.under11,
+      playerId: riversideDemoIds.players.jamie,
+      guardianId: riversideDemoIds.guardians.parent,
+      status: "available",
+      respondedAt: "2026-07-20T18:05:00.000Z",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000001222",
+      organisationId,
+      eventId: riversideDemoIds.events.match,
+      teamId: riversideDemoIds.teams.under11,
+      playerId: riversideDemoIds.players.rowan,
+      guardianId: riversideDemoIds.guardians.coach,
+      status: "unsure",
+      respondedAt: "2026-07-20T19:10:00.000Z",
+    },
+  ],
+  polls: [
+    {
+      id: riversideDemoIds.poll,
+      organisationId,
+      teamId: riversideDemoIds.teams.under11,
+      title: "September training time",
+      status: "open",
+      closesAt: "2026-07-24T18:00:00.000Z",
+      options: [
+        { id: "00000000-0000-4000-8000-000000001311", startsAt: "2026-09-05T08:00:00.000Z", endsAt: "2026-09-05T09:30:00.000Z", availableRespondents: 8, pitchCapacity: 10 },
+        { id: "00000000-0000-4000-8000-000000001312", startsAt: "2026-09-05T10:00:00.000Z", endsAt: "2026-09-05T11:30:00.000Z", availableRespondents: 9, pitchCapacity: 9 },
+        { id: "00000000-0000-4000-8000-000000001313", startsAt: "2026-09-05T16:00:00.000Z", endsAt: "2026-09-05T17:30:00.000Z", availableRespondents: 9, pitchCapacity: 7 },
+      ],
+    },
+  ],
+  squads: [
+    {
+      id: riversideDemoIds.squad,
+      organisationId,
+      teamId: riversideDemoIds.teams.under11,
+      eventId: riversideDemoIds.events.match,
+      status: "published",
+      publishedAt: "2026-07-20T20:00:00.000Z",
+      members: [
+        { playerId: riversideDemoIds.players.jamie, status: "selected", recentSelections: 3, recentMinutes: 140 },
+        { playerId: riversideDemoIds.players.rowan, status: "standby", recentSelections: 4, recentMinutes: 190 },
+      ],
+    },
+  ],
+  squadHistory: [
+    {
+      id: "00000000-0000-4000-8000-000000001411",
+      organisationId,
+      squadId: riversideDemoIds.squad,
+      playerId: riversideDemoIds.players.jamie,
+      previousStatus: null,
+      nextStatus: "selected",
+      reason: "Initial publication",
+      changedAt: "2026-07-20T20:00:00.000Z",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000001412",
+      organisationId,
+      squadId: riversideDemoIds.squad,
+      playerId: riversideDemoIds.players.rowan,
+      previousStatus: null,
+      nextStatus: "standby",
+      reason: "Initial publication",
+      changedAt: "2026-07-20T20:00:00.000Z",
+    },
+  ],
+  standbyReplacements: [
+    {
+      id: "00000000-0000-4000-8000-000000001421",
+      organisationId,
+      teamId: riversideDemoIds.teams.under11,
+      squadId: riversideDemoIds.squad,
+      withdrawnPlayerId: riversideDemoIds.players.jamie,
+      standbyPlayerId: riversideDemoIds.players.rowan,
+      status: "offered",
+      expiresAt: "2026-08-07T18:00:00.000Z",
+    },
+  ],
+  notifications: [
+    {
+      id: "dev-availability-reminder",
+      organisationId,
+      householdId: riversideDemoIds.households.morgan,
+      eventId: riversideDemoIds.events.match,
+      template: "availability-reminder",
+      scheduledFor: "2026-07-21T07:00:00.000Z",
+      deliveryStatus: "not-sent",
+      provider: "development-outbox",
+    },
+  ],
+  calendarTokens: [
+    {
+      id: riversideDemoIds.calendarToken,
+      organisationId,
+      membershipId: riversideDemoIds.memberships.parent,
+      tokenHash: calendarTokenHash(riversideDemoCalendarToken),
+      revokedAt: null,
     },
   ],
 };
