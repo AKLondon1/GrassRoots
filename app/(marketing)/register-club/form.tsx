@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { createClubAction, initialClubRegistrationState } from "@/app/(marketing)/register-club/actions";
+import {
+  createClubAction,
+  type ClubRegistrationState,
+} from "@/app/(marketing)/register-club/actions";
+
+const initialClubRegistrationState: ClubRegistrationState = { status: "idle" };
 
 export function RegisterClubForm() {
   const [state, action, pending] = useActionState(createClubAction, initialClubRegistrationState);

@@ -4,10 +4,12 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
-  initialMagicLinkState,
   submitMagicLink,
+  type MagicLinkState,
 } from "@/app/(auth)/sign-in/actions";
 import { Button } from "@/components/ui/button";
+
+const initialMagicLinkState: MagicLinkState = { status: "idle" };
 
 function SubmitButton() {
   const { pending } = useFormStatus();

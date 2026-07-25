@@ -7,11 +7,6 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export const initialInvitationState: InvitationAcceptanceState = {
-  status: "error",
-  message: "",
-};
-
 export async function acceptInvitationAction(
   _previousState: InvitationAcceptanceState,
   formData: FormData,

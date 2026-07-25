@@ -14,7 +14,6 @@ const schema = z.object({
 
 export type ClubRegistrationState = { status: "idle" | "error" | "created"; message?: string; workspace?: string; fieldErrors?: { name?: string; slug?: string } };
 export type OrganisationRpc = (name: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { message: string } | null }>;
-export const initialClubRegistrationState: ClubRegistrationState = { status: "idle" };
 
 export async function createClubForMode(mode: DataMode, formData: FormData, rpc: OrganisationRpc): Promise<ClubRegistrationState> {
   if (mode !== "supabase") return { status: "error", message: "Club registration is unavailable in fictional demo mode." };

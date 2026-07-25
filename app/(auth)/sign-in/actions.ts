@@ -31,8 +31,6 @@ export type MagicLinkSender = (
   emailRedirectTo?: string,
 ) => Promise<{ error: { message: string } | null }>;
 
-export const initialMagicLinkState: MagicLinkState = { status: "idle" };
-
 export async function requestMagicLinkForMode(
   mode: DataMode,
   formData: FormData,

@@ -3,11 +3,14 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  acceptInvitationAction,
-  initialInvitationState,
-} from "@/app/(auth)/invite/[token]/actions";
+import { acceptInvitationAction } from "@/app/(auth)/invite/[token]/actions";
 import { Button } from "@/components/ui/button";
+import type { InvitationAcceptanceState } from "@/features/tenancy/invitations";
+
+const initialInvitationState: InvitationAcceptanceState = {
+  status: "error",
+  message: "",
+};
 
 function AcceptButton() {
   const { pending } = useFormStatus();
