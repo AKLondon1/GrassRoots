@@ -16,11 +16,23 @@ export async function GET(request: Request) {
   const access = await resolveProductionWorkspaceAccess(createSupabaseTenancyAccessReader(client), workspace, auth.user.id);
   if (access.status === "denied" || !access.capabilities.includes("reports:view")) return new Response("Report access denied", { status: 403 });
   const db = client as unknown as SupabaseClient;
-  const [{ data: organisation }, { data: bookings, error }] = await Promise.all([
-    db.from("organisations").select("name").eq("id", access.organisationId).single(),
-    db.from("facility_bookings").select("title,starts_at,ends_at,status,reservation_unit_id").eq("organisation_id", access.organisationId).order("starts_at"),
-  ]);
-  if (error) return new Response("Could not prepare facilities report", { status: 500 });
+  const { data: organisation } = await db.from("organisations").select("name").eq("id", access.organisationId).single();
+  const bookings: Array<Record<string, unknown> & { id: string }> = [];
+  let cursor: string | undefined;
+  do {
+    let query = db
+      .from("facility_bookings")
+      .select("id,title,starts_at,ends_at,status,reservation_unit_id")
+      .eq("organisation_id", access.organisationId)
+      .order("id")
+      .limit(500);
+    if (cursor) query = query.gt("id", cursor);
+    const { data, error } = await query;
+    if (error) return new Response("Could not prepare facilities report", { status: 500 });
+    const page = (data ?? []) as Array<Record<string, unknown> & { id: string }>;
+    bookings.push(...page);
+    cursor = page.length === 500 ? page.at(-1)?.id : undefined;
+  } while (cursor);
   const exportResult = await createPersistedExport({
     organisationId: access.organisationId,
     organisationName: String(organisation?.name ?? "Organisation"),
@@ -28,14 +40,14 @@ export async function GET(request: Request) {
     capability: "reports:view",
     format,
     title: "Facility bookings",
-    rows: (bookings ?? []) as Array<Record<string, unknown>>,
+    rows: bookings,
     now: new Date().toISOString(),
   }, createSupabaseExportAuditWriter(db));
   const extension = format === "pdf" ? "pdf" : "csv";
   return new Response(exportResult.content, {
     headers: {
       "Content-Type": format === "pdf" ? "application/pdf" : "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="grassroots-facilities.${extension}"`,
+      "Content-Disposition": `attachment; filename="grassroots-facilities-${format === "pdf" ? "summary" : "bookings"}.${extension}"`,
       "Cache-Control": "private, no-store",
     },
   });

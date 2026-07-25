@@ -56,7 +56,7 @@ select throws_ok(
       'available', 'cross-team-player-01'
     )
   $$,
-  '42501',
+  '23503',
   null,
   'cross-team availability is denied'
 );
@@ -213,7 +213,7 @@ select throws_ok(
   $$update public.availability_responses
     set guardian_id = '00000000-0000-4000-8000-000000000403'
     where id = '00000000-0000-4000-8000-000000001221'$$,
-  '42501', null,
+  '23503', null,
   'guardian identity cannot be reassigned through availability updates'
 );
 reset role;
@@ -231,11 +231,11 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000201', true);
 select throws_ok(
   $$insert into public.poll_responses (
-    organisation_id, poll_id, option_id, respondent_id, team_id, status
+    organisation_id, poll_id, option_id, respondent_id, response
   ) values (
     '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301',
     '00000000-0000-4000-8000-000000001311', '00000000-0000-4000-8000-000000001321',
-    '00000000-0000-4000-8000-000000000802', 'available'
+    'available'
   )$$,
   '42501', null,
   'closed poll responses are denied'
@@ -287,6 +287,16 @@ select is(
   'suspended organisation calendar feed is denied'
 );
 rollback to savepoint suspended_calendar;
+
+update public.standby_replacements
+set status = 'offered',
+    offered_at = now(),
+    expires_at = now() + interval '1 day',
+    responded_at = null
+where id = '00000000-0000-4000-8000-000000001421';
+update public.squad_members
+set status = 'standby'
+where id = '00000000-0000-4000-8000-000000001403';
 
 savepoint standby_inactive;
 update public.guardians

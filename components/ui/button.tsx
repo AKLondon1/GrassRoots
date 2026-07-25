@@ -15,12 +15,14 @@ const buttonVariants = cva(
         secondary:
           "border border-border-strong bg-background text-ink hover:border-primary hover:bg-surface active:bg-surface-strong",
         quiet: "text-ink hover:bg-surface-strong active:bg-border",
+        ghost: "text-ink hover:bg-surface-strong active:bg-border",
         danger:
           "bg-danger text-primary-foreground hover:bg-danger-strong active:bg-danger-strong",
       },
       size: {
         default: "min-h-12",
         small: "min-h-11 px-4",
+        sm: "min-h-11 px-4",
         icon: "size-11 p-0",
       },
     },

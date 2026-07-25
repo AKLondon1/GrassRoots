@@ -1,25 +1,30 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { QuarantineUpload } from "@/components/files/quarantine-upload";
+import { InvitationIssuer } from "@/components/people/invitation-issuer";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Status } from "@/components/ui/status";
-import { allocateFacilityBooking, closeFacilityAndResolveBooking, createClubDocumentReference, createMaintenanceRequest, createVenue, createVolunteerShift, reserveEquipment, revokeSupportSessionAction, startSupportSession, submitSupportRequest } from "@/features/facilities/actions";
+import { allocateFacilityBooking, closeFacilityAndResolveBooking, createMaintenanceRequest, createVenue, createVolunteerShift, promoteCleanClubDocument, reserveEquipment, revokeSupportSessionAction, startSupportSession, submitSupportRequest } from "@/features/facilities/actions";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { keysetPage } from "@/lib/pagination/keyset";
+import { createAgeGroup, createOppositionContact, createPlayer, createSeason, createTeam } from "@/features/people/production-actions";
 
 interface UnitRow { id: string; name: string; capacity: number; accessible: boolean; floodlit: boolean }
 interface BookingRow { id: string; reservation_unit_id: string; event_instance_id: string | null; title: string; starts_at: string; ends_at: string; buffer_before_minutes: number; buffer_after_minutes: number; status: string }
 interface EventInstanceRow { id: string; event_id: string; starts_at: string; ends_at: string }
 
-export async function ProductionClubOperationsScreen({ organisationId, section, workspace }: { organisationId: string; section: string; workspace: string }) {
+export async function ProductionClubOperationsScreen({ organisationId, section, workspace, cursor }: { organisationId: string; section: string; workspace: string; cursor?: string }) {
   const client = await createServerSupabaseClient();
   if (!client) throw new Error("The organisation connection is unavailable.");
   const db = client as unknown as SupabaseClient;
   const [{ data: unitData, error: unitError }, { data: bookingData, error: bookingError }, { data: instanceData, error: instanceError }, { data: eventData, error: eventError }] = await Promise.all([
-    db.from("reservation_units").select("id,name,capacity,accessible,floodlit").eq("organisation_id", organisationId).eq("active", true).order("name"),
-    db.from("facility_bookings").select("id,reservation_unit_id,event_instance_id,title,starts_at,ends_at,buffer_before_minutes,buffer_after_minutes,status").eq("organisation_id", organisationId).neq("status", "cancelled").order("starts_at"),
-    db.from("event_instances").select("id,event_id,starts_at,ends_at").eq("organisation_id", organisationId).eq("status", "scheduled").order("starts_at"),
-    db.from("events").select("id,title").eq("organisation_id", organisationId),
+    db.from("reservation_units").select("id,name,capacity,accessible,floodlit").eq("organisation_id", organisationId).eq("active", true).order("name").limit(250),
+    db.from("facility_bookings").select("id,reservation_unit_id,event_instance_id,title,starts_at,ends_at,buffer_before_minutes,buffer_after_minutes,status").eq("organisation_id", organisationId).neq("status", "cancelled").order("starts_at").limit(500),
+    db.from("event_instances").select("id,event_id,starts_at,ends_at").eq("organisation_id", organisationId).eq("status", "scheduled").order("starts_at").limit(500),
+    db.from("events").select("id,title").eq("organisation_id", organisationId).order("id").limit(500),
   ]);
   if (unitError || bookingError || instanceError || eventError) throw new Error("We could not load the facility plan.");
   const units = (unitData ?? []) as UnitRow[];
@@ -46,7 +51,7 @@ export async function ProductionClubOperationsScreen({ organisationId, section, 
   }
 
   if (section === "equipment") {
-    const { data, error } = await db.from("equipment_items").select("id,name,quantity").eq("organisation_id", organisationId).order("name");
+    const { data, error } = await db.from("equipment_items").select("id,name,quantity").eq("organisation_id", organisationId).order("name").limit(250);
     if (error) throw new Error("We could not load equipment.");
     const items = (data ?? []) as Array<{ id: string; name: string; quantity: number }>;
     if (!items.length) return <EmptyState title="No equipment items yet" description="Create equipment inventory before reserving kit."/>;
@@ -61,13 +66,13 @@ export async function ProductionClubOperationsScreen({ organisationId, section, 
   }
 
   if (section === "venues") {
-    const { data, error } = await db.from("venues").select("id,name,address").eq("organisation_id", organisationId).order("name");
+    const { data, error } = await db.from("venues").select("id,name,address").eq("organisation_id", organisationId).order("name").limit(250);
     if (error) throw new Error("We could not load venues.");
     return <OperationalForm title="Create venue" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createVenue} className="grid gap-4 sm:grid-cols-2"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Venue name" name="name"/><Field label="Address" name="address"/><Button type="submit" className="sm:col-span-2 sm:w-fit">Create venue</Button></form></OperationalForm>;
   }
 
   if (section === "maintenance") {
-    const [{ data: facilityData, error: facilityError }, { data: requestData, error: requestError }] = await Promise.all([db.from("facilities").select("id,name").eq("organisation_id", organisationId).order("name"), db.from("maintenance_requests").select("id,title,status").eq("organisation_id", organisationId).order("created_at", { ascending: false })]);
+    const [{ data: facilityData, error: facilityError }, { data: requestData, error: requestError }] = await Promise.all([db.from("facilities").select("id,name").eq("organisation_id", organisationId).order("name").limit(250), db.from("maintenance_requests").select("id,title,status").eq("organisation_id", organisationId).order("created_at", { ascending: false }).limit(100)]);
     if (facilityError || requestError) throw new Error("We could not load maintenance.");
     const facilities = (facilityData ?? []) as Array<{ id: string; name: string }>;
     if (!facilities.length) return <EmptyState title="No facilities yet" description="Create a venue and facility before adding maintenance."/>;
@@ -75,13 +80,16 @@ export async function ProductionClubOperationsScreen({ organisationId, section, 
   }
 
   if (section === "documents") {
-    const { data, error } = await db.from("club_documents").select("id,title,current_version").eq("organisation_id", organisationId).order("title");
-    if (error) throw new Error("We could not load documents.");
-    return <OperationalForm title="Register a versioned document" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createClubDocumentReference} className="grid gap-4 sm:grid-cols-2"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Document title" name="title"/><Field label="Private storage path" name="storagePath"/><Field label="SHA-256 checksum" name="checksum"/><Button type="submit" className="sm:col-span-2 sm:w-fit">Register document version</Button></form></OperationalForm>;
+    const [{ data, error }, { data: cleanIntents, error: intentError }] = await Promise.all([
+      db.from("club_documents").select("id,title,current_version").eq("organisation_id", organisationId).order("title").limit(250),
+      db.from("private_upload_intents").select("id,original_filename,scanned_at").eq("organisation_id", organisationId).eq("status", "clean").order("scanned_at").limit(100),
+    ]);
+    if (error || intentError) throw new Error("We could not load private documents.");
+    return <div className="space-y-5"><QuarantineUpload workspace={workspace}/>{(cleanIntents ?? []).length ? <section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Promote scanner-approved uploads</h2><ul className="mt-5 divide-y divide-border">{((cleanIntents ?? []) as Array<{ id: string; original_filename: string }>).map((intent) => <li className="py-4" key={intent.id}><p className="font-semibold">{intent.original_filename}</p><form action={promoteCleanClubDocument} className="mt-3 flex flex-wrap items-end gap-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><input name="intentId" type="hidden" value={intent.id}/><Field label="Document title" name="title"/><Button type="submit">Promote privately</Button></form></li>)}</ul></section> : <p className="rounded-xl bg-surface p-4 text-sm text-muted">No scanner-approved uploads are ready for promotion.</p>}<OperationalForm title="Private document register" rows={(data ?? []) as Array<Record<string, unknown>>}><p className="text-sm text-muted">Versions are created only from a clean quarantine intent; paths and checksums cannot be entered manually.</p></OperationalForm></div>;
   }
 
   if (section === "volunteers") {
-    const { data, error } = await db.from("volunteer_shifts").select("id,title,starts_at,required_people").eq("organisation_id", organisationId).order("starts_at");
+    const { data, error } = await db.from("volunteer_shifts").select("id,title,starts_at,required_people").eq("organisation_id", organisationId).order("starts_at").limit(250);
     if (error) throw new Error("We could not load volunteer shifts.");
     return <OperationalForm title="Create volunteer shift" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createVolunteerShift} className="grid gap-4 sm:grid-cols-2"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Shift title" name="title"/><Field label="People needed" name="requiredPeople" type="number" defaultValue="1"/><Field label="Starts at" name="startsAt" type="datetime-local"/><Field label="Ends at" name="endsAt" type="datetime-local"/><Button type="submit" className="sm:col-span-2 sm:w-fit">Create shift</Button></form></OperationalForm>;
   }
@@ -95,20 +103,61 @@ export async function ProductionClubOperationsScreen({ organisationId, section, 
   }
 
   if (section === "reports") {
-    return <section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Live facilities report</h2><div className="mt-5 grid gap-4 sm:grid-cols-3"><Summary label="Active bookings" value={bookings.length}/><Summary label="Unallocated fixtures" value={unallocatedInstances.length}/><Summary label="Bookable units" value={units.length}/></div><p className="mt-5 text-sm text-muted">CSV and PDF exports are permission-filtered, watermarked and written to the export audit before download.</p><div className="mt-5 flex flex-wrap gap-3"><Button asChild><a href={`/api/exports/facilities?workspace=${encodeURIComponent(workspace)}&format=csv`}>Download audited CSV</a></Button><Button asChild variant="secondary"><a href={`/api/exports/facilities?workspace=${encodeURIComponent(workspace)}&format=pdf`}>Download audited PDF</a></Button></div></section>;
+    return <section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Live facilities report</h2><div className="mt-5 grid gap-4 sm:grid-cols-3"><Summary label="Active bookings" value={bookings.length}/><Summary label="Unallocated fixtures" value={unallocatedInstances.length}/><Summary label="Bookable units" value={units.length}/></div><p className="mt-5 text-sm text-muted">The audited CSV contains every permission-filtered booking. The watermarked PDF is a concise record-count summary suitable for filing.</p><div className="mt-5 flex flex-wrap gap-3"><Button asChild><a href={`/api/exports/facilities?workspace=${encodeURIComponent(workspace)}&format=csv`}>Download full audited CSV</a></Button><Button asChild variant="secondary"><a href={`/api/exports/facilities?workspace=${encodeURIComponent(workspace)}&format=pdf`}>Download PDF summary</a></Button></div></section>;
+  }
+
+  if (section === "seasons") {
+    const { data, error } = await db.from("seasons").select("id,name,starts_on,ends_on,is_active").eq("organisation_id", organisationId).order("starts_on", { ascending: false }).limit(250);
+    if (error) throw new Error("We could not load seasons.");
+    return <OperationalForm title="Create season" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createSeason} className="grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Season name" name="name"/><Field label="Starts on" name="startsOn" type="date"/><Field label="Ends on" name="endsOn" type="date"/><Button type="submit" className="sm:w-fit">Create season</Button></form></OperationalForm>;
+  }
+
+  if (section === "teams") {
+    const [{ data: seasons, error: seasonError }, { data: ageGroups, error: ageError }, { data: teams, error: teamError }] = await Promise.all([
+      db.from("seasons").select("id,name").eq("organisation_id", organisationId).order("starts_on", { ascending: false }).limit(250),
+      db.from("age_groups").select("id,name,minimum_age,maximum_age").eq("organisation_id", organisationId).order("minimum_age").limit(100),
+      db.from("teams").select("id,name,status").eq("organisation_id", organisationId).order("name").limit(250),
+    ]);
+    if (seasonError || ageError || teamError) throw new Error("We could not load team setup.");
+    const seasonOptions = (seasons ?? []) as Array<{ id: string; name: string }>;
+    const ageOptions = (ageGroups ?? []) as Array<{ id: string; name: string }>;
+    return <div className="space-y-5"><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Create team</h2>{seasonOptions.length && ageOptions.length ? <form action={createTeam} className="mt-5 grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Team name" name="name"/><label className="text-sm font-semibold">Season<select name="seasonId" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{seasonOptions.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select></label><label className="text-sm font-semibold">Age group<select name="ageGroupId" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{ageOptions.map((age) => <option key={age.id} value={age.id}>{age.name}</option>)}</select></label><Button type="submit" className="sm:w-fit">Create team</Button></form> : <p className="mt-4 text-sm text-muted">Create at least one season and age group to enable team creation.</p>}</section><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Add age group</h2><form action={createAgeGroup} className="mt-5 grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Name" name="name"/><Field label="Minimum age" name="minimumAge" type="number"/><Field label="Maximum age" name="maximumAge" type="number"/><Button type="submit" className="sm:w-fit">Add age group</Button></form></section><OperationalForm title="Saved teams" rows={(teams ?? []) as Array<Record<string, unknown>>}><p className="text-sm text-muted">Teams are scoped to a season and age group and protected by organisation permissions.</p></OperationalForm></div>;
+  }
+
+  if (section === "people") {
+    const { data, error } = await db.from("players").select("id,first_name,last_name,date_of_birth,status").eq("organisation_id", organisationId).order("last_name").limit(250);
+    if (error) throw new Error("We could not load players.");
+    return <OperationalForm title="Add player" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createPlayer} className="grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="First name" name="firstName"/><Field label="Last name" name="lastName"/><Field label="Date of birth" name="dateOfBirth" type="date"/><Button type="submit" className="sm:w-fit">Add player</Button></form></OperationalForm>;
+  }
+
+  if (section === "opposition") {
+    const { data, error } = await db.from("opposition_contacts").select("id,club_name,display_name,email,phone").eq("organisation_id", organisationId).order("club_name").limit(250);
+    if (error) throw new Error("We could not load opposition contacts.");
+    return <OperationalForm title="Add opposition contact" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createOppositionContact} className="grid gap-4 sm:grid-cols-2"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Club name" name="clubName"/><Field label="Contact name" name="displayName"/><Field label="Email (optional)" name="email" type="email" required={false}/><Field label="Phone (optional)" name="phone" type="tel" required={false}/><Button type="submit" className="sm:w-fit">Add contact</Button></form></OperationalForm>;
+  }
+
+  if (section === "invitations") {
+    const [{ data: roles, error: roleError }, { data: invites, error: inviteError }] = await Promise.all([
+      db.from("roles").select("id,name").eq("organisation_id", organisationId).order("name").limit(100),
+      db.from("organisation_invites").select("id,email,expires_at,accepted_at").eq("organisation_id", organisationId).order("created_at", { ascending: false }).limit(100),
+    ]);
+    if (roleError || inviteError) throw new Error("We could not load adult invitations.");
+    return <OperationalForm title="Invite an adult" rows={(invites ?? []).map((invite) => ({ ...(invite as Record<string, unknown>), name: (invite as { email: string }).email, status: (invite as { accepted_at: string | null }).accepted_at ? "accepted" : "pending" }))}><InvitationIssuer workspace={workspace} roles={(roles ?? []) as Array<{ id: string; name: string }>}/></OperationalForm>;
   }
 
   const tableBySection: Record<string, string> = {
-    teams: "teams", seasons: "seasons", people: "players", invitations: "organisation_invites",
-    opposition: "opposition_contacts", audit: "audit_log",
+    audit: "audit_log",
   };
   const table = tableBySection[section];
   if (table) {
-    const { data, error } = await db.from(table).select("*").eq("organisation_id", organisationId).limit(20);
+    let query = db.from(table).select("*").eq("organisation_id", organisationId).order("id").limit(21);
+    if (cursor) query = query.gt("id", cursor);
+    const { data, error } = await query;
     if (error) throw new Error(`We could not load ${section}.`);
-    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const page = keysetPage((data ?? []) as Array<Record<string, unknown> & { id: string }>);
+    const rows = page.items;
     if (!rows.length) return <EmptyState title={`No ${section} yet`} description="Create the first authorised record to begin this workflow." />;
-    return <section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold">Live {section}</h2><Status tone="success">Saved organisation data</Status></div><ul className="mt-5 divide-y divide-border">{rows.map((row) => <li key={String(row.id)} className="py-4 first:pt-0"><p className="font-semibold">{String(row.name ?? row.title ?? row.subject ?? row.action ?? "Operational record")}</p><p className="mt-1 text-sm text-muted">Record {String(row.id)}</p></li>)}</ul></section>;
+    return <section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold">Live {section}</h2><Status tone="success">Saved organisation data</Status></div><ul className="mt-5 divide-y divide-border">{rows.map((row) => <li key={String(row.id)} className="py-4 first:pt-0"><p className="font-semibold">{String(row.name ?? row.title ?? row.subject ?? row.action ?? "Operational record")}</p><p className="mt-1 text-sm text-muted">Record {String(row.id)}</p></li>)}</ul>{page.nextCursor ? <Button asChild className="mt-5" variant="secondary"><Link href={`/app/${workspace}/${section}?cursor=${page.nextCursor}`}>Next page</Link></Button> : null}</section>;
   }
   return <LiveBookings units={units} bookings={bookings}/>;
 }
@@ -118,8 +167,8 @@ export async function ProductionSupportOperationsScreen({ organisationId, worksp
   if (!client) throw new Error("The support connection is unavailable.");
   const db = client as unknown as SupabaseClient;
   const [{ data: requestData, error: requestError }, { data: sessionData, error: sessionError }] = await Promise.all([
-    db.from("support_requests").select("id,subject,status").eq("organisation_id", organisationId).in("status", ["open", "investigating"]),
-    db.from("support_sessions").select("id,reason,expires_at,allowed_resources").eq("organisation_id", organisationId).is("revoked_at", null),
+    db.from("support_requests").select("id,subject,status").eq("organisation_id", organisationId).in("status", ["open", "investigating"]).order("id").limit(50),
+    db.from("support_sessions").select("id,reason,expires_at,allowed_resources").eq("organisation_id", organisationId).is("revoked_at", null).order("id").limit(50),
   ]);
   if (requestError || sessionError) throw new Error("We could not load support access.");
   const requests = (requestData ?? []) as Array<{ id: string; subject: string; status: string }>;
@@ -139,4 +188,4 @@ function SelectUnit({ units }: { units: UnitRow[] }) { return <label className="
 function LiveBookings({ units, bookings }: { units: UnitRow[]; bookings: BookingRow[] }) { const names = new Map(units.map((unit) => [unit.id, unit.name])); return bookings.length ? <section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Current facility commitments</h2><ul className="mt-5 space-y-3">{bookings.map((booking) => <li key={booking.id} className="rounded-xl bg-surface p-4"><p className="font-semibold">{booking.title}</p><p className="mt-1 text-sm text-muted">{names.get(booking.reservation_unit_id) ?? "Facility"} · {new Date(booking.starts_at).toLocaleString("en-GB", { timeZone: "Europe/London" })}</p></li>)}</ul></section> : <EmptyState title="No facility bookings yet" description="Allocate the first pitch commitment for this organisation."/>; }
 function Summary({ label, value }: { label: string; value: number }) { return <div className="rounded-xl bg-surface p-4"><p className="text-sm font-semibold text-muted">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></div>; }
 function EventList({ instances, titles }: { instances: EventInstanceRow[]; titles: Map<string, string> }) { return instances.length ? <section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Scheduled club events</h2><ul className="mt-5 divide-y divide-border">{instances.map((instance) => <li key={instance.id} className="py-4 first:pt-0"><p className="font-semibold">{titles.get(instance.event_id) ?? "Club event"}</p><p className="mt-1 text-sm text-muted">{new Date(instance.starts_at).toLocaleString("en-GB", { timeZone: "Europe/London" })}</p></li>)}</ul></section> : <EmptyState title="No scheduled events" description="Create a team event to populate the club calendar."/>; }
-function OperationalForm({ title, rows, children }: { title: string; rows: Array<Record<string, unknown>>; children: ReactNode }) { return <div className="space-y-5"><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">{title}</h2><div className="mt-5">{children}</div></section>{rows.length ? <section className="rounded-2xl border border-border-strong bg-background p-5"><h2 className="font-semibold">Saved organisation records</h2><ul className="mt-3 divide-y divide-border">{rows.map((row) => <li key={String(row.id)} className="py-3"><p className="font-semibold">{String(row.name ?? row.title ?? "Operational record")}</p><p className="mt-1 text-sm text-muted">{String(row.status ?? row.address ?? `Version ${row.current_version ?? 1}`)}</p></li>)}</ul></section> : null}</div>; }
+function OperationalForm({ title, rows, children }: { title: string; rows: Array<Record<string, unknown>>; children: ReactNode }) { return <div className="space-y-5"><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">{title}</h2><div className="mt-5">{children}</div></section>{rows.length ? <section className="rounded-2xl border border-border-strong bg-background p-5"><h2 className="font-semibold">Saved organisation records</h2><ul className="mt-3 divide-y divide-border">{rows.map((row) => <li key={String(row.id)} className="py-3"><p className="font-semibold">{String(row.name ?? row.title ?? (row.first_name && row.last_name ? `${row.first_name} ${row.last_name}` : row.club_name) ?? "Operational record")}</p><p className="mt-1 text-sm text-muted">{String(row.status ?? row.address ?? row.date_of_birth ?? row.display_name ?? `Version ${row.current_version ?? 1}`)}</p></li>)}</ul></section> : null}</div>; }

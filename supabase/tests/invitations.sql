@@ -190,7 +190,7 @@ values
     '00000000-0000-4000-8000-000000013002',
     'organisation',
     '00000000-0000-4000-8000-000000011001',
-    repeat('f', 64),
+    repeat('9', 64),
     now() + interval '1 day',
     now()
   );
@@ -248,7 +248,7 @@ where organisation_id = '00000000-0000-4000-8000-000000011001'
   and user_id = '00000000-0000-4000-8000-000000019002';
 set local role authenticated;
 select throws_ok(
-  $$select public.accept_organisation_invite(repeat('f', 64))$$,
+  $$select public.accept_organisation_invite(repeat('9', 64))$$,
   'P0001',
   'Invitation could not be accepted',
   'an outstanding invitation cannot reactivate a suspended membership'

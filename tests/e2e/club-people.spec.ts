@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("club admin previews and explicitly applies a fictional people import", async ({
+test("Flow 1: club admin completes the fictional setup and people-import journey", async ({
   page,
 }) => {
   await page.goto("/app/riverside-juniors/people?role=club");

@@ -36,6 +36,12 @@ export const riversideDemoIds = {
     jamie: "00000000-0000-4000-8000-000000000601",
     maya: "00000000-0000-4000-8000-000000000602",
     rowan: "00000000-0000-4000-8000-000000000603",
+    ari: "00000000-0000-4000-8000-000000000604",
+    ellis: "00000000-0000-4000-8000-000000000605",
+    noor: "00000000-0000-4000-8000-000000000606",
+    robin: "00000000-0000-4000-8000-000000000607",
+    sasha: "00000000-0000-4000-8000-000000000608",
+    quinn: "00000000-0000-4000-8000-000000000609",
   },
   season: "00000000-0000-4000-8000-000000000701",
   ageGroups: {
@@ -164,6 +170,26 @@ export interface RiversideDemoSeed {
   readonly standbyReplacements: readonly DemoStandbyReplacement[];
   readonly notifications: readonly DemoNotification[];
   readonly calendarTokens: readonly DemoCalendarToken[];
+  readonly coaching: DemoCoachingSeed;
+  readonly financeGovernance: DemoFinanceGovernanceSeed;
+}
+
+export interface DemoFinanceGovernanceSeed {
+  readonly invoice: { id: string; invoiceNumber: string; householdId: string; playerId: string; currency: "GBP"; subtotalPence: number; discountPence: number; totalPence: number; provider: "manual-development"; status: "issued" };
+  readonly consent: { id: string; key: string; title: string; version: number; status: "response-needed" };
+  readonly qualification: { membershipId: string; type: string; expiresOn: string };
+  readonly platformSubscription: { kind: "platform-subscription"; plan: string; foundingEntitlement: boolean; status: "active" };
+  readonly sensitiveAccess: { resourceType: "safeguarding-concern"; resourceId: string; outcome: "allowed"; actorMembershipId: string };
+}
+
+export interface DemoCoachingSeed {
+  readonly trainingSession: {
+    id: string; eventId: string; teamId: string; title: string; status: "published";
+    plannedMinutes: number; items: readonly { id: string; kind: "segment" | "drill"; title: string; durationMinutes: number; order: number }[];
+  };
+  readonly attendance: readonly { playerId: string; status: "present" | "late"; occurredAt: string }[];
+  readonly match: { id: string; eventId: string; teamId: string; state: "ready"; elapsedBeforeMs: number };
+  readonly development: readonly { playerId: string; objective: string; privateObservation: string; approvedParentSummary: string; approvedAt: string }[];
 }
 
 export interface DemoEvent {
@@ -397,6 +423,12 @@ const seed: RiversideDemoSeed = {
       lastName: "Taylor",
       dateOfBirth: "2015-06-20",
     },
+    { id: riversideDemoIds.players.ari, organisationId, firstName: "Ari", lastName: "Singh", dateOfBirth: "2015-03-04" },
+    { id: riversideDemoIds.players.ellis, organisationId, firstName: "Ellis", lastName: "Reed", dateOfBirth: "2015-11-19" },
+    { id: riversideDemoIds.players.noor, organisationId, firstName: "Noor", lastName: "Hughes", dateOfBirth: "2015-08-11" },
+    { id: riversideDemoIds.players.robin, organisationId, firstName: "Robin", lastName: "Clarke", dateOfBirth: "2015-01-23" },
+    { id: riversideDemoIds.players.sasha, organisationId, firstName: "Sasha", lastName: "Evans", dateOfBirth: "2015-05-16" },
+    { id: riversideDemoIds.players.quinn, organisationId, firstName: "Quinn", lastName: "Bailey", dateOfBirth: "2015-09-02" },
   ],
   guardians: [
     {
@@ -526,6 +558,12 @@ const seed: RiversideDemoSeed = {
       memberKind: "coach",
       memberId: "00000000-0000-4000-8000-000000000a01",
     },
+    { id: "00000000-0000-4000-8000-000000000c05", organisationId, teamId: riversideDemoIds.teams.under11, memberKind: "player", memberId: riversideDemoIds.players.ari },
+    { id: "00000000-0000-4000-8000-000000000c06", organisationId, teamId: riversideDemoIds.teams.under11, memberKind: "player", memberId: riversideDemoIds.players.ellis },
+    { id: "00000000-0000-4000-8000-000000000c07", organisationId, teamId: riversideDemoIds.teams.under11, memberKind: "player", memberId: riversideDemoIds.players.noor },
+    { id: "00000000-0000-4000-8000-000000000c08", organisationId, teamId: riversideDemoIds.teams.under11, memberKind: "player", memberId: riversideDemoIds.players.robin },
+    { id: "00000000-0000-4000-8000-000000000c09", organisationId, teamId: riversideDemoIds.teams.under11, memberKind: "player", memberId: riversideDemoIds.players.sasha },
+    { id: "00000000-0000-4000-8000-000000000c10", organisationId, teamId: riversideDemoIds.teams.under11, memberKind: "player", memberId: riversideDemoIds.players.quinn },
   ],
   oppositionContacts: [
     {
@@ -682,6 +720,51 @@ const seed: RiversideDemoSeed = {
       revokedAt: null,
     },
   ],
+  coaching: {
+    trainingSession: {
+      id: "00000000-0000-4000-8000-000000003001",
+      eventId: riversideDemoIds.events.training,
+      teamId: riversideDemoIds.teams.under11,
+      title: "Passing, scanning and support",
+      status: "published",
+      plannedMinutes: 55,
+      items: [
+        { id: "00000000-0000-4000-8000-000000003011", kind: "segment", title: "Welcome and warm-up", durationMinutes: 10, order: 1 },
+        { id: "00000000-0000-4000-8000-000000003012", kind: "drill", title: "Passing gates", durationMinutes: 20, order: 2 },
+        { id: "00000000-0000-4000-8000-000000003013", kind: "drill", title: "Small-sided game", durationMinutes: 25, order: 3 },
+      ],
+    },
+    attendance: [
+      { playerId: riversideDemoIds.players.jamie, status: "present", occurredAt: "2026-08-02T08:31:00.000Z" },
+      { playerId: riversideDemoIds.players.rowan, status: "late", occurredAt: "2026-08-02T08:36:00.000Z" },
+    ],
+    match: { id: "00000000-0000-4000-8000-000000003101", eventId: riversideDemoIds.events.match, teamId: riversideDemoIds.teams.under11, state: "ready", elapsedBeforeMs: 0 },
+    development: [{
+      playerId: riversideDemoIds.players.jamie,
+      objective: "Scan before receiving",
+      privateObservation: "Keep prompts brief and celebrate early scanning.",
+      approvedParentSummary: "Jamie showed brave passing choices, supported teammates and used both feet.",
+      approvedAt: "2026-08-10T09:00:00.000Z",
+    }],
+  },
+  financeGovernance: {
+    invoice: {
+      id: "00000000-0000-4000-8000-000000004101",
+      invoiceNumber: "GR-2026-014",
+      householdId: riversideDemoIds.households.morgan,
+      playerId: riversideDemoIds.players.jamie,
+      currency: "GBP",
+      subtotalPence: 15_000,
+      discountPence: 2_500,
+      totalPence: 12_500,
+      provider: "manual-development",
+      status: "issued",
+    },
+    consent: { id: "00000000-0000-4000-8000-000000004201", key: "photo-video", title: "Photo and video consent", version: 3, status: "response-needed" },
+    qualification: { membershipId: riversideDemoIds.memberships.coach, type: "Emergency Aid", expiresOn: "2026-08-01" },
+    platformSubscription: { kind: "platform-subscription", plan: "Founding club", foundingEntitlement: true, status: "active" },
+    sensitiveAccess: { resourceType: "safeguarding-concern", resourceId: "00000000-0000-4000-8000-000000004220", outcome: "allowed", actorMembershipId: riversideDemoIds.memberships.club },
+  },
 };
 
 export function createRiversideDemoSeed(): RiversideDemoSeed {

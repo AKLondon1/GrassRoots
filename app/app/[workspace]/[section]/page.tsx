@@ -24,15 +24,23 @@ import { CoachCoreFootballScreen } from "@/features/screens/coach/core-football"
 import { ParentCoreFootballScreen } from "@/features/screens/parent/core-football";
 import { ClubOperationsScreen } from "@/features/screens/club/operations";
 import { ProductionClubOperationsScreen, ProductionSupportOperationsScreen } from "@/features/screens/club/production-operations";
+import { ProductionCoachingScopeSelector, ProductionCoachingScreen, ProductionParentDevelopmentScreen } from "@/features/screens/coach/production-coaching";
+import { ParentAccountScreen } from "@/features/screens/parent/account";
+import { ProductionParentCoreFootballScreen } from "@/features/screens/parent/production-core-football";
+import { ClubGovernanceScreen } from "@/features/screens/club/governance";
+import { PlatformOperationsScreen } from "@/features/screens/platform/operations";
+import { ProductionClubGovernanceScreen, ProductionParentAccountScreen, ProductionPlatformOperationsScreen } from "@/features/screens/production-governance";
+import { ProductionCoachCoreOverview } from "@/features/screens/coach/production-core-overview";
+import { parseUuidCursor } from "@/lib/pagination/keyset";
 
 export const metadata: Metadata = {
-  title: `Illustrative workspace | ${brand.name}`,
-  description: `A non-persistent, illustrative ${brand.name} application shell.`,
+  title: `Club workspace | ${brand.name}`,
+  description: `Manage grassroots football operations, coaching and household journeys in ${brand.name}.`,
 };
 
 interface WorkspaceSectionPageProps {
   params: Promise<{ section: string; workspace: string }>;
-  searchParams: Promise<{ role?: string | string[]; supportSessionId?: string; resourceType?: string; resourceId?: string }>;
+  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; cursor?: string | string[] }>;
 }
 
 export default async function WorkspaceSectionPage({
@@ -41,6 +49,7 @@ export default async function WorkspaceSectionPage({
 }: WorkspaceSectionPageProps) {
   const { section, workspace } = await params;
   const query = await searchParams;
+  const cursor = parseUuidCursor(query.cursor);
   let role: AppRole;
   let capabilities: readonly string[];
   let organisationId: string | null = null;
@@ -50,7 +59,11 @@ export default async function WorkspaceSectionPage({
     role = parseAppRole(requestedRole);
     const session = getDemoSession(role);
     if (workspace !== session.organisation.slug) notFound();
-    capabilities = getDemoCapabilities(session.role);
+    capabilities = [
+      ...getDemoCapabilities(session.role),
+      ...(session.role === "club" && query.clubRole === "welfare" ? ["safeguarding:view"] : []),
+      ...(session.role === "platform" && query.platformScope === "audited" ? ["access:manage"] : []),
+    ];
     organisationId = session.organisation.id;
   } else {
     const supabase = await createServerSupabaseClient();
@@ -102,13 +115,17 @@ export default async function WorkspaceSectionPage({
     );
   }
 
-  const parentCoreSections = new Set(["actions", "schedule", "event", "availability", "polls", "squad", "announcements"]);
-  const coachCoreSections = new Set(["today", "calendar", "event-editor", "availability", "squad"]);
+  const parentCoreSections = new Set(["home", "actions", "schedule", "event", "availability", "polls", "squad", "announcements", "child"]);
+  const parentAccountSections = new Set(["payments", "consents", "messages", "notifications", "household", "calendar", "help"]);
+  const coachCoreSections = new Set(["today", "team", "calendar", "event-editor", "availability", "squad", "match-day", "formation", "playing-time", "attendance", "training", "drills", "players", "development", "compose", "volunteers"]);
+  const phase4CoachSections = new Set(["match-day", "formation", "playing-time", "attendance", "training", "drills", "players", "development", "compose", "volunteers"]);
   const clubOperationsSections = new Set([
     "overview", "calendar", "teams", "seasons", "people", "invitations", "venues",
     "pitch-planner", "inspections", "maintenance", "fixtures", "opposition",
     "documents", "equipment", "volunteers", "reports", "audit", "support",
   ]);
+  const clubGovernanceSections = new Set(["payments", "communications", "forms", "consents", "compliance", "safeguarding", "reports", "settings", "integrations", "entitlements"]);
+  const platformOperationsSections = new Set(["organisations", "plans", "feature-flags", "provider-usage", "health", "support", "audited-access", "analytics"]);
   const isCoreFootballSection =
     (role === "parent" && parentCoreSections.has(section)) ||
     (role === "coach" && coachCoreSections.has(section));
@@ -117,16 +134,37 @@ export default async function WorkspaceSectionPage({
   let screenContent: ReactNode;
   if (environment.dataMode === "demo" && role === "club" && section === "people") {
     screenContent = <PeopleSetup />;
+  } else if (environment.dataMode === "demo" && role === "club" && clubGovernanceSections.has(section)) {
+    screenContent = <ClubGovernanceScreen section={section} role={query.clubRole === "welfare" ? "welfare-officer" : query.clubRole === "treasurer" ? "treasurer" : "club-admin"} />;
   } else if (environment.dataMode === "demo" && role === "club" && clubOperationsSections.has(section)) {
     screenContent = <ClubOperationsScreen section={section} />;
   } else if (environment.dataMode === "demo" && role === "parent" && parentCoreSections.has(section)) {
     screenContent = <ParentCoreFootballScreen section={section} />;
+  } else if (environment.dataMode === "demo" && role === "parent" && parentAccountSections.has(section)) {
+    screenContent = <ParentAccountScreen section={section} />;
   } else if (environment.dataMode === "demo" && role === "coach" && coachCoreSections.has(section)) {
     screenContent = <CoachCoreFootballScreen section={section} />;
+  } else if (environment.dataMode === "demo" && role === "platform" && platformOperationsSections.has(section)) {
+    screenContent = <PlatformOperationsScreen section={section} />;
+  } else if (environment.dataMode !== "demo" && role === "club" && clubGovernanceSections.has(section) && organisationId) {
+    screenContent = <ProductionClubGovernanceScreen organisationId={organisationId} section={section} workspace={workspace} concernId={query.concernId} />;
+  } else if (environment.dataMode !== "demo" && role === "parent" && parentAccountSections.has(section) && organisationId) {
+    screenContent = <ProductionParentAccountScreen organisationId={organisationId} section={section} workspace={workspace} />;
+  } else if (environment.dataMode !== "demo" && role === "platform" && platformOperationsSections.has(section) && section !== "support") {
+    screenContent = <ProductionPlatformOperationsScreen section={section} cursor={cursor} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && isClubOperationsSection && organisationId) {
-    screenContent = <ProductionClubOperationsScreen organisationId={organisationId} section={section} workspace={workspace} />;
+    screenContent = <ProductionClubOperationsScreen organisationId={organisationId} section={section} workspace={workspace} cursor={cursor} />;
   } else if (environment.dataMode !== "demo" && isPlatformSupportSection && organisationId) {
     screenContent = <ProductionSupportOperationsScreen organisationId={organisationId} workspace={workspace} readRequest={{ sessionId: query.supportSessionId, resourceType: query.resourceType, resourceId: query.resourceId }} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && phase4CoachSections.has(section) && organisationId) {
+    const coachingSelection = { teamId: query.teamId, matchId: query.matchId, sessionId: query.sessionId };
+    screenContent = <div className="space-y-5"><ProductionCoachingScopeSelector organisationId={organisationId} section={section} selection={coachingSelection}/><ProductionCoachingScreen organisationId={organisationId} section={section} workspace={workspace} selection={coachingSelection}/></div>;
+  } else if (environment.dataMode !== "demo" && role === "parent" && section === "child" && organisationId) {
+    screenContent = <ProductionParentDevelopmentScreen organisationId={organisationId} />;
+  } else if (environment.dataMode !== "demo" && role === "parent" && parentCoreSections.has(section) && section !== "child" && organisationId) {
+    screenContent = <ProductionParentCoreFootballScreen organisationId={organisationId} section={section} workspace={workspace} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && isCoreFootballSection && organisationId) {
+    screenContent = <ProductionCoachCoreOverview organisationId={organisationId} section={section} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && isCoreFootballSection) {
     screenContent = (
       <EmptyState

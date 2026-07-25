@@ -39,7 +39,28 @@ describe("PWA foundation", () => {
   it("ships a service worker that never caches sensitive workspace requests", async () => {
     const worker = await readFile("public/sw.js", "utf8");
 
-    expect(worker).toContain("/app/");
+    expect(worker).toContain("PUBLIC_CACHE_ALLOWLIST");
+    expect(worker).not.toContain("cache.put(request");
     expect(worker).toContain("request.method !== \"GET\"");
+    expect(worker).toContain("SKIP_WAITING");
+    expect(worker).toContain("registration.navigationPreload.enable");
+  });
+
+  it("offers an explicit, accessible update action instead of forcing an install", async () => {
+    const registration = await readFile("components/pwa/register-service-worker.tsx", "utf8");
+    expect(registration).toContain("An update is ready");
+    expect(registration).toContain("Update GrassRoots");
+    expect(registration).toContain("grassroots:pwa-update");
+  });
+
+  it("supports visible push notifications and same-origin click-through", async () => {
+    const worker = await readFile("public/sw.js", "utf8");
+    const registration = await readFile("components/pwa/push-registration.tsx", "utf8");
+    expect(worker).toContain('addEventListener("push"');
+    expect(worker).toContain('addEventListener("notificationclick"');
+    expect(worker).toContain("showNotification");
+    expect(registration).toContain("pushManager.subscribe");
+    expect(registration).toContain("Notification.requestPermission");
+    expect(registration).toContain("/api/push/subscriptions");
   });
 });

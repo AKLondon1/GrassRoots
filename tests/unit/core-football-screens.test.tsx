@@ -48,4 +48,18 @@ describe("coach core football screens", () => {
       expect(screen.getByTestId(`coach-${section}`)).toBeInTheDocument();
     },
   );
+
+  it.each(["team", "match-day", "formation", "playing-time", "attendance", "training", "drills", "players", "development", "compose", "volunteers"])(
+    "renders a functional coaching workspace for %s",
+    (section) => {
+      render(<CoachCoreFootballScreen section={section} />);
+      expect(screen.getByTestId(`coach-${section}`)).toBeInTheDocument();
+    },
+  );
+});
+
+it("shows parents only an approved positive development summary", () => {
+  render(<ParentCoreFootballScreen section="child" />);
+  expect(screen.getByTestId("parent-child")).toHaveTextContent(/approved development update/i);
+  expect(screen.queryByText(/private observation/i)).not.toBeInTheDocument();
 });

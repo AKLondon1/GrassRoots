@@ -4,6 +4,10 @@ import { z } from "zod";
 import { headers } from "next/headers";
 
 import { environment } from "@/lib/env";
+import { trustedClientIdentifier } from "@/lib/security/request";
+import { consumeDistributedRateLimit } from "@/lib/security/server-rate-limit";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { normaliseInternalPath } from "@/lib/supabase/auth-callback";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { DataMode } from "@/lib/supabase/types";
@@ -77,7 +81,21 @@ export async function submitMagicLink(
   _previousState: MagicLinkState,
   formData: FormData,
 ): Promise<MagicLinkState> {
-  const origin = (await headers()).get("origin");
+  const requestHeaders = await headers();
+  const origin = requestHeaders.get("origin");
+  const emailKey = String(formData.get("email") ?? "").trim().toLowerCase();
+  const clientKey = trustedClientIdentifier(requestHeaders);
+  if (environment.dataMode === "supabase") {
+    const admin = createSupabaseAdminClient();
+    if (!admin) return { status: "error", message: "Sign-in protection is temporarily unavailable." };
+    try {
+      const [clientLimit, accountLimit] = await Promise.all([
+        consumeDistributedRateLimit(admin as unknown as SupabaseClient, `sign-in-client:${clientKey}`, { limit: 20, windowSeconds: 900 }),
+        consumeDistributedRateLimit(admin as unknown as SupabaseClient, `sign-in-account:${emailKey}`, { limit: 5, windowSeconds: 900 }),
+      ]);
+      if (!clientLimit.allowed || !accountLimit.allowed) return { status: "error", message: "Too many sign-in links were requested. Wait 15 minutes and try again." };
+    } catch { return { status: "error", message: "Sign-in protection is temporarily unavailable." }; }
+  }
   const nextPath = normaliseInternalPath(
     typeof formData.get("next") === "string"
       ? String(formData.get("next"))
@@ -85,10 +103,14 @@ export async function submitMagicLink(
   );
   let emailRedirectTo: string | undefined;
   try {
-    emailRedirectTo = origin
+    const trustedBase = environment.server.APP_ORIGIN ?? (environment.nodeEnv === "production" ? undefined : origin);
+    if (origin && environment.server.APP_ORIGIN && new URL(origin).origin !== new URL(environment.server.APP_ORIGIN).origin) {
+      throw new Error("Untrusted origin");
+    }
+    emailRedirectTo = trustedBase
       ? new URL(
           `/auth/callback?next=${encodeURIComponent(nextPath)}`,
-          origin,
+          trustedBase,
         ).toString()
       : undefined;
   } catch {

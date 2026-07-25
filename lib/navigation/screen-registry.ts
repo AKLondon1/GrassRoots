@@ -48,6 +48,7 @@ function defineScreen(
   label: string,
   capability: `${string}:${string}`,
   componentKind: ScreenComponentKind,
+  denied?: string,
 ): ScreenDefinition {
   const subject = label.toLowerCase();
 
@@ -66,7 +67,9 @@ function defineScreen(
         description: `When ${subject} are available, they will appear here with the next useful action.`,
       },
       error: `We could not load ${subject}. Try again in a moment.`,
-      denied: `Your current club role does not include permission to view ${subject}.`,
+      denied:
+        denied ??
+        `Your current club role does not include permission to view ${subject}.`,
     },
   };
 }
@@ -123,13 +126,21 @@ const clubScreens = [
   defineScreen("club", "fixtures", "Fixtures", "fixtures:manage", "list"),
   defineScreen("club", "opposition", "Opposition", "opposition:manage", "directory"),
   defineScreen("club", "payments", "Payments", "payments:manage", "report"),
+  defineScreen("club", "communications", "Communications", "messages:manage", "list"),
   defineScreen("club", "forms", "Forms", "forms:manage", "form"),
   defineScreen("club", "consents", "Consents", "consents:manage", "report"),
   defineScreen("club", "documents", "Documents", "documents:manage", "directory"),
   defineScreen("club", "equipment", "Equipment", "equipment:manage", "list"),
   defineScreen("club", "volunteers", "Volunteer rota", "volunteers:manage", "list"),
   defineScreen("club", "compliance", "Compliance", "compliance:manage", "board"),
-  defineScreen("club", "safeguarding", "Safeguarding", "safeguarding:view", "board"),
+  defineScreen(
+    "club",
+    "safeguarding",
+    "Safeguarding",
+    "safeguarding:view",
+    "board",
+    "Safeguarding detail hidden. Your current club role does not include permission to view restricted case information.",
+  ),
   defineScreen("club", "reports", "Reports", "reports:view", "report"),
   defineScreen("club", "audit", "Audit log", "audit:view", "report"),
   defineScreen("club", "support", "Support", "support:request", "form"),

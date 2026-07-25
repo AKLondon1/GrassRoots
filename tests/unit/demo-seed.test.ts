@@ -31,4 +31,12 @@ describe("Riverside Juniors demo seed", () => {
     expect(seed.players.every((player) => !("userId" in player))).toBe(true);
     expect(seed.adults.every(({ email }) => email.endsWith("@example.test"))).toBe(true);
   });
+
+  it("includes deterministic, fictional finance and governance acceptance data", () => {
+    const seed = createRiversideDemoSeed();
+    expect(seed.financeGovernance.invoice).toMatchObject({ currency: "GBP", totalPence: 12500, provider: "manual-development" });
+    expect(seed.financeGovernance.consent.version).toBe(3);
+    expect(seed.financeGovernance.platformSubscription.kind).toBe("platform-subscription");
+    expect(JSON.stringify(seed.financeGovernance.sensitiveAccess)).not.toMatch(/body|clinicalNotes|detail/i);
+  });
 });

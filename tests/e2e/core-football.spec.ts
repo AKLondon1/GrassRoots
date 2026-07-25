@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-test("parent responds to availability on a responsive task screen", async ({ page }) => {
+test("Flow 2: parent responds to availability on a responsive task screen", async ({ page }) => {
   await page.goto("/app/riverside-juniors/availability?role=parent");
   await expect(page.getByRole("heading", { level: 1, name: "Availability" })).toBeVisible();
   await page.getByRole("radio", { name: "Unavailable" }).check();
@@ -9,6 +9,15 @@ test("parent responds to availability on a responsive task screen", async ({ pag
   await expect(page.getByRole("status").filter({ hasText: "Demo only" })).toContainText("not saved");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test("Flow 3: parent answers a capacity-aware time poll", async ({ page }) => {
+  await page.goto("/app/riverside-juniors/polls?role=parent");
+  await expect(page.getByRole("heading", { level: 1, name: "Time polls" })).toBeVisible();
+  await page.getByRole("radio", { name: /Saturday 5 September · 11:00/i }).check();
+  await page.getByRole("button", { name: "Preview poll response" }).click();
+  await expect(page.getByRole("status")).toContainText(/not saved/i);
+  await expect(page.getByText(/capacity 9 · recommended/i)).toBeVisible();
 });
 
 test("coach validates an event edit and previews the change scope", async ({ page }) => {
@@ -23,7 +32,7 @@ test("coach validates an event edit and previews the change scope", async ({ pag
   await expect(page.getByRole("status").filter({ hasText: "Demo only" })).toContainText("not saved");
 });
 
-test("coach can preview a fair squad publication", async ({ page }) => {
+test("Flow 5: coach can preview a fair squad publication", async ({ page }) => {
   await page.goto("/app/riverside-juniors/squad?role=coach");
   await expect(page.getByText("Selection guide", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Preview squad publication" }).click();

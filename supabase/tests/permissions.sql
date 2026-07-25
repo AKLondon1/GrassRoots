@@ -9,7 +9,7 @@ values
 
 insert into public.organisations (id, name, slug, status)
 values
-  ('00000000-0000-4000-8000-000000001001', 'Riverside Juniors', 'riverside-juniors', 'active'),
+  ('00000000-0000-4000-8000-000000001001', 'Riverside Juniors', 'permissions-riverside-juniors', 'active'),
   ('00000000-0000-4000-8000-000000001002', 'Northfield Juniors', 'northfield-juniors', 'active'),
   ('00000000-0000-4000-8000-000000001003', 'Closed Juniors', 'closed-juniors', 'suspended');
 
@@ -51,25 +51,20 @@ values (
   'Coach'
 );
 
-insert into public.permissions (id, key, description)
-values (
-  '00000000-0000-4000-8000-000000004001',
-  'events:manage',
-  'Manage events in the assigned scope'
-);
-
 insert into public.role_permissions (
   id,
   organisation_id,
   role_id,
   permission_id
 )
-values (
+select
   '00000000-0000-4000-8000-000000005001',
   '00000000-0000-4000-8000-000000001001',
   '00000000-0000-4000-8000-000000003001',
-  '00000000-0000-4000-8000-000000004001'
-);
+  permission.id
+from public.permissions permission
+where permission.key = 'events:manage'
+on conflict (organisation_id, role_id, permission_id) do nothing;
 
 insert into public.seasons (id, organisation_id, name, starts_on, ends_on)
 values (
@@ -126,6 +121,35 @@ values
     '00000000-0000-4000-8000-000000008001',
     'pitch'
   );
+
+create function pg_temp.try_cross_organisation_membership_update()
+returns bigint
+language plpgsql
+as $$
+declare
+  affected bigint;
+begin
+  update public.memberships
+  set status = 'suspended'
+  where id = '00000000-0000-4000-8000-000000002002';
+  get diagnostics affected = row_count;
+  return affected;
+end;
+$$;
+
+create function pg_temp.try_cross_organisation_membership_delete()
+returns bigint
+language plpgsql
+as $$
+declare
+  affected bigint;
+begin
+  delete from public.memberships
+  where id = '00000000-0000-4000-8000-000000002002';
+  get diagnostics affected = row_count;
+  return affected;
+end;
+$$;
 
 set local role authenticated;
 select set_config(
@@ -219,27 +243,12 @@ select throws_ok(
   'RLS denies a cross-organisation membership insert'
 );
 select is(
-  (
-    with changed as (
-      update public.memberships
-      set status = 'suspended'
-      where id = '00000000-0000-4000-8000-000000002002'
-      returning 1
-    )
-    select count(*) from changed
-  ),
+  pg_temp.try_cross_organisation_membership_update(),
   0::bigint,
   'RLS prevents cross-organisation membership updates'
 );
 select is(
-  (
-    with removed as (
-      delete from public.memberships
-      where id = '00000000-0000-4000-8000-000000002002'
-      returning 1
-    )
-    select count(*) from removed
-  ),
+  pg_temp.try_cross_organisation_membership_delete(),
   0::bigint,
   'RLS prevents cross-organisation membership deletes'
 );

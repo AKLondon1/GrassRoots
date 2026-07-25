@@ -29,6 +29,7 @@ const demoCapabilitiesByRole = {
     "attendance:manage",
     "training:manage",
     "players:view",
+    "development:manage",
     "announcements:manage",
     "volunteers:view",
   ],

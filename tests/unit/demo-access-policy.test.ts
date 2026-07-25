@@ -21,7 +21,7 @@ describe("demo access policy", () => {
 
     expect(policy.getDemoCapabilities("club")).toContain("club:view");
     expect(policy.getDemoCapabilities("club")).not.toContain("safeguarding:view");
-    expect(policy.getDemoCapabilities("coach")).not.toContain(
+    expect(policy.getDemoCapabilities("coach")).toContain(
       "development:manage",
     );
     expect(policy.getDemoCapabilities("platform")).not.toContain(

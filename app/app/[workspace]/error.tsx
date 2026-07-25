@@ -3,16 +3,17 @@
 import { ErrorState } from "@/components/ui/error-state";
 
 interface WorkspaceErrorProps {
+  error: Error & { digest?: string };
   reset: () => void;
 }
 
-export default function WorkspaceError({ reset }: WorkspaceErrorProps) {
+export default function WorkspaceError({ error, reset }: WorkspaceErrorProps) {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-surface p-4 sm:p-8">
       <ErrorState
         className="bg-background"
         title="We could not load this workspace"
-        description="The illustrative workspace hit an unexpected problem. Try loading it again."
+        description={`The workspace hit an unexpected problem. Try loading it again.${error.digest ? ` Reference: ${error.digest}` : ""}`}
         action={
           <button
             type="button"

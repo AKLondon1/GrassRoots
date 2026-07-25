@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(join(process.cwd(), "supabase/migrations/0003_events_polls_squads.sql"), "utf8");
 const databaseTests = readFileSync(join(process.cwd(), "supabase/tests/events_polls_squads.sql"), "utf8");
+const seed = readFileSync(join(process.cwd(), "supabase/seed.sql"), "utf8");
 
 const tenantTables = [
   "events", "event_series", "event_instances", "event_exceptions", "event_change_summaries",
@@ -43,6 +44,12 @@ describe("events migration static safety", () => {
     expect(databaseTests).toMatch(/recurrence exception is scoped to one occurrence/i);
     expect(databaseTests).toMatch(/cross-team availability is denied/i);
     expect(databaseTests).toMatch(/squad publication records immutable history/i);
+    expect(seed.indexOf("00000000-0000-4000-8000-000000000604")).toBeLessThan(
+      seed.indexOf("insert into public.squad_members"),
+    );
+    expect(seed).toMatch(
+      /insert into public\.standby_replacements[\s\S]*offered_at[\s\S]*responded_at/i,
+    );
   });
 
   it("grants authenticated DML and provisions Phase 2 permissions for future roles", () => {
@@ -56,6 +63,9 @@ describe("events migration static safety", () => {
     expect(migration).toMatch(/create function public\.accept_standby_replacement[\s\S]*guardian\.status = 'active'[\s\S]*can_access_team/i);
     expect(migration).toMatch(/grant select, insert, delete on public\.standby_replacements to authenticated/i);
     expect(migration).toMatch(/grant select, insert, delete on public\.squad_members to authenticated/i);
+    expect(migration).toMatch(
+      /revoke update on public\.squad_members, public\.standby_replacements from authenticated/i,
+    );
     expect(migration).not.toMatch(/standby_update_linked_or_manage/i);
     expect(migration).not.toMatch(/grant select, insert, update[^;]*public\.standby_replacements/i);
     expect(migration).not.toMatch(/grant select, insert, update[^;]*public\.squad_members/i);
@@ -69,6 +79,9 @@ describe("events migration static safety", () => {
   it("persists all recurrence edit scopes through one authorised transaction boundary", () => {
     expect(migration).toMatch(/create function public\.edit_recurring_event[\s\S]*requested_scope not in \('this', 'this-and-future', 'all'\)/i);
     expect(migration).toMatch(/requested_scope = 'this'[\s\S]*insert into public\.event_exceptions/i);
+    expect(migration).toMatch(
+      /coalesce\(requested_patch->>'status' = 'cancelled', false\)/i,
+    );
     expect(migration).toMatch(/requested_scope = 'this-and-future'[\s\S]*insert into public\.event_series/i);
     expect(migration).toMatch(/update public\.events event[\s\S]*insert into public\.event_change_summaries/i);
     expect(migration).toMatch(/replacement_instance_id[\s\S]*references public\.event_instances[^;]*on update cascade/i);
@@ -80,6 +93,12 @@ describe("events migration static safety", () => {
   it("enforces response windows and guardian identity on direct DML", () => {
     expect(migration).toMatch(/availability_response_is_open[\s\S]*response_deadline >= now\(\)/i);
     expect(migration).toMatch(/availability_validate_player_team[\s\S]*update of organisation_id, team_id, player_id, guardian_id/i);
+    expect(migration).toMatch(
+      /if tg_table_name in \('availability_responses', 'transport_requests'\) then[\s\S]*new\.guardian_id/i,
+    );
+    expect(migration).not.toMatch(
+      /tg_table_name in \('availability_responses', 'transport_requests'\) and not exists/i,
+    );
     expect(migration).toMatch(/can_access_poll_respondent[\s\S]*poll\.status = 'open' and poll\.closes_at >= now\(\)/i);
     expect(databaseTests).toMatch(/availability cannot be submitted after the deadline/i);
     expect(databaseTests).toMatch(/closed poll responses are denied/i);

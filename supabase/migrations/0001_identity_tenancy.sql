@@ -387,7 +387,8 @@ begin
     'roles:manage',
     'seasons:manage',
     'settings:manage'
-  );
+  )
+  on conflict (organisation_id, role_id, permission_id) do nothing;
 
   insert into public.scoped_role_assignments (
     organisation_id,
@@ -770,6 +771,7 @@ using (
     null
   )
 );
+revoke insert, update, delete on public.organisation_invites from authenticated;
 grant select, update on public.profiles to authenticated;
 grant select, update, delete on public.organisations to authenticated;
 grant select, insert, update, delete on public.memberships to authenticated;

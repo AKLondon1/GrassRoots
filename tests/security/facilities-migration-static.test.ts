@@ -17,6 +17,12 @@ describe("facilities migration security", () => {
     expect(sql).toContain("allocate_facility_booking");
     expect(sql).toContain("close_and_relocate_facility_bookings");
     expect(sql).toContain("exclude using gist");
+    expect(sql).toMatch(/occupied_range\s+tstzrange\s+not null/i);
+    expect(sql).toContain("set_facility_booking_occupied_range");
+    expect(sql).toMatch(/occupied_range with &&/i);
+    expect(sql).not.toMatch(
+      /exclude using gist[\s\S]*?tstzrange\(\s*starts_at\s*-\s*make_interval/i,
+    );
   });
 
   it("keeps support access time-limited and audited", () => {

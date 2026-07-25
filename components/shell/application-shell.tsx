@@ -6,17 +6,21 @@ import {
   CircleAlert,
   Clock3,
   MapPin,
+  LogOut,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { signOutCurrentSession } from "@/app/(auth)/sign-out/actions";
 import { BottomNavigation } from "@/components/shell/bottom-navigation";
 import { CommandMenu } from "@/components/shell/command-menu";
 import { RoleSwitcher } from "@/components/shell/role-switcher";
 import { SideNavigation } from "@/components/shell/side-navigation";
 import { Status } from "@/components/ui/status";
+import { Button } from "@/components/ui/button";
+import { PushRegistration } from "@/components/pwa/push-registration";
 import { brand } from "@/lib/brand";
 import {
   getAllowedScreensForRole,
@@ -110,7 +114,13 @@ function ApplicationShell({
 
           <div className="flex items-center gap-2">
             <CommandMenu isDemo={isDemo} role={role} screens={screens} workspace={workspace} />
+            {!isDemo ? <PushRegistration workspace={workspace} /> : null}
             {isDemo ? <RoleSwitcher value={role} workspace={workspace} /> : null}
+            {isDemo ? (
+              <Button asChild size="small" variant="quiet"><Link href="/sign-in"><LogOut className="size-4" aria-hidden="true"/><span className="hidden sm:inline">Leave demo</span><span className="sr-only sm:hidden">Leave demo</span></Link></Button>
+            ) : (
+              <form action={signOutCurrentSession}><Button aria-label="Sign out of this session" size="small" type="submit" variant="quiet"><LogOut className="size-4" aria-hidden="true"/><span className="hidden sm:inline">Sign out</span></Button></form>
+            )}
           </div>
         </div>
         {isDemo ? (
@@ -134,14 +144,21 @@ function ApplicationShell({
           />
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+        <main
+          aria-labelledby="application-page-title"
+          className="min-w-0 flex-1 overflow-y-auto px-4 py-6 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/35 sm:px-6 sm:py-8 lg:px-10 lg:py-10"
+          tabIndex={0}
+        >
           <div className="mx-auto max-w-5xl">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-primary-strong">
                   {roleLabels[role]}{isDemo ? " preview" : ""}
                 </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-ink sm:text-4xl">
+                <h1
+                  className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-ink sm:text-4xl"
+                  id="application-page-title"
+                >
                   {isDefaultScreen ? demo.title : currentScreen.label}
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:text-base">
@@ -152,6 +169,12 @@ function ApplicationShell({
                 {isDemo ? "Demo mode" : "Organisation access"}
               </Status>
             </div>
+
+            {isDemo ? (
+              <p className="mt-5 text-xs leading-5 text-muted" role="note">
+                Preview data is fictional and remains in this browser session only.
+              </p>
+            ) : null}
 
             {children ? <div className="mt-8">{children}</div> : <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.55fr)]">
               <section
@@ -199,7 +222,7 @@ function ApplicationShell({
                   {demo.secondaryTitle}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted">{demo.secondaryDetail}</p>
-                <div className="mt-6 flex items-start gap-3 border-t border-border-strong pt-5">
+                {!isDemo ? <div className="mt-6 flex items-start gap-3 border-t border-border-strong pt-5">
                   {role === "parent" ? (
                     <MapPin className="mt-0.5 size-4 shrink-0 text-primary-strong" aria-hidden="true" />
                   ) : role === "coach" ? (
@@ -210,11 +233,9 @@ function ApplicationShell({
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-info-strong" aria-hidden="true" />
                   )}
                   <p className="text-xs leading-5 text-muted">
-                    {isDemo
-                      ? "Preview data is fictional and remains in this browser session only."
-                      : "Access is limited by your active organisation membership and assigned capabilities."}
+                    Access is limited by your active organisation membership and assigned capabilities.
                   </p>
-                </div>
+                </div> : null}
               </aside>
             </div>}
           </div>

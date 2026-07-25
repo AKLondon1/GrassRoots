@@ -161,6 +161,7 @@ create table public.facility_bookings (
   ends_at timestamptz not null,
   buffer_before_minutes integer not null default 0 check (buffer_before_minutes between 0 and 240),
   buffer_after_minutes integer not null default 0 check (buffer_after_minutes between 0 and 240),
+  occupied_range tstzrange not null,
   status text not null default 'confirmed' check (status in ('provisional', 'confirmed', 'cancelled')),
   external_hire_id uuid,
   created_by_membership_id uuid not null,
@@ -174,13 +175,26 @@ create table public.facility_bookings (
   exclude using gist (
     organisation_id with =,
     reservation_unit_id with =,
-    tstzrange(
-      starts_at - make_interval(mins => buffer_before_minutes),
-      ends_at + make_interval(mins => buffer_after_minutes),
-      '[)'
-    ) with &&
+    occupied_range with &&
   ) where (status <> 'cancelled')
 );
+
+create function public.set_facility_booking_occupied_range()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  new.occupied_range := tstzrange(
+    new.starts_at - make_interval(mins => new.buffer_before_minutes),
+    new.ends_at + make_interval(mins => new.buffer_after_minutes),
+    '[)'
+  );
+  return new;
+end;
+$$;
+
+create trigger facility_bookings_set_occupied_range
+before insert or update of starts_at, ends_at, buffer_before_minutes, buffer_after_minutes
+on public.facility_bookings
+for each row execute function public.set_facility_booking_occupied_range();
 
 create table public.facility_blocks (
   id uuid primary key default gen_random_uuid(),
@@ -520,7 +534,7 @@ begin
     select 1 from public.facility_bookings booking
     where booking.organisation_id = requested_organisation_id and booking.status <> 'cancelled'
       and public.reservation_units_conflict(requested_organisation_id, booking.reservation_unit_id, requested_unit_id)
-      and tstzrange(booking.starts_at - make_interval(mins => booking.buffer_before_minutes), booking.ends_at + make_interval(mins => booking.buffer_after_minutes), '[)')
+      and booking.occupied_range
         && tstzrange(requested_starts_at - make_interval(mins => requested_buffer_before), requested_ends_at + make_interval(mins => requested_buffer_after), '[)')
   ) or exists (
     select 1 from public.facility_blocks block
@@ -553,7 +567,7 @@ create function public.preview_facility_closure_impacts(
     and (public.has_capability(requested_organisation_id, 'pitches:inspect', 'organisation', requested_organisation_id, null)
       or public.has_capability(requested_organisation_id, 'pitches:manage', 'organisation', requested_organisation_id, null))
     and public.reservation_units_conflict(requested_organisation_id, booking.reservation_unit_id, requested_unit_id)
-    and tstzrange(booking.starts_at - make_interval(mins => booking.buffer_before_minutes), booking.ends_at + make_interval(mins => booking.buffer_after_minutes), '[)')
+    and booking.occupied_range
       && tstzrange(requested_starts_at, requested_ends_at, '[)')
   order by booking.starts_at, booking.id;
 $$;
@@ -602,7 +616,7 @@ begin
   for affected in select * from public.facility_bookings booking
     where booking.organisation_id = requested_organisation_id and booking.status <> 'cancelled'
       and public.reservation_units_conflict(requested_organisation_id, booking.reservation_unit_id, requested_unit_id)
-      and tstzrange(booking.starts_at - make_interval(mins => booking.buffer_before_minutes), booking.ends_at + make_interval(mins => booking.buffer_after_minutes), '[)') && tstzrange(requested_starts_at, requested_ends_at, '[)')
+      and booking.occupied_range && tstzrange(requested_starts_at, requested_ends_at, '[)')
     for update
   loop
     action_value := nullif(replacement_units ->> affected.id::text, '');
@@ -628,7 +642,7 @@ begin
     end if;
     if exists (select 1 from public.facility_bookings other where other.organisation_id = requested_organisation_id and other.id <> affected.id and other.status <> 'cancelled'
       and public.reservation_units_conflict(requested_organisation_id, other.reservation_unit_id, target_unit_id)
-      and tstzrange(other.starts_at - make_interval(mins => other.buffer_before_minutes), other.ends_at + make_interval(mins => other.buffer_after_minutes), '[)')
+      and other.occupied_range
         && tstzrange(affected.starts_at - make_interval(mins => affected.buffer_before_minutes), affected.ends_at + make_interval(mins => affected.buffer_after_minutes), '[)'))
       or exists (select 1 from public.facility_blocks block where block.organisation_id = requested_organisation_id
         and public.reservation_units_conflict(requested_organisation_id, block.reservation_unit_id, target_unit_id)

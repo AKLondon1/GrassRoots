@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { localPartsToUtc } from "@/features/events/time-zone";
 
 const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
@@ -148,13 +149,24 @@ export async function createVolunteerShift(formData: FormData) {
   revalidatePath(`/app/${input.workspace}/volunteers`);
 }
 
-export async function createClubDocumentReference(formData: FormData) {
-  const input = baseRecordSchema.extend({ title: z.string().trim().min(2).max(160), storagePath: z.string().trim().min(3).max(500), checksum: z.string().trim().min(8).max(200) }).parse(Object.fromEntries(formData));
+export async function promoteCleanClubDocument(formData: FormData) {
+  const input = baseRecordSchema.extend({ title: z.string().trim().min(2).max(160), intentId: z.string().uuid() }).parse(Object.fromEntries(formData));
   const client = await createServerSupabaseClient();
-  if (!client) throw new Error("Sign in to create a document reference.");
+  if (!client) throw new Error("Sign in to promote a scanner-approved document.");
   const db = client as unknown as SupabaseClient;
-  const { error } = await db.rpc("create_club_document", { requested_organisation_id: input.organisationId, requested_title: input.title, requested_storage_path: input.storagePath, requested_checksum: input.checksum });
-  if (error) throw new Error(error.message);
+  const { data: intent, error: intentError } = await db.from("private_upload_intents").select("id,organisation_id,storage_path,original_filename,status,checksum_sha256").eq("organisation_id", input.organisationId).eq("id", input.intentId).eq("status", "clean").single();
+  if (intentError || !intent?.checksum_sha256) throw new Error("A scanner-approved upload is required.");
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("Private document storage is unavailable.");
+  const safeFilename = String(intent.original_filename).replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120);
+  const finalPath = `${input.organisationId}/documents/${input.intentId}/${safeFilename}`;
+  const { error: moveError } = await admin.storage.from("grassroots-private-quarantine").move(String(intent.storage_path), finalPath, { destinationBucket: "grassroots-private-files" });
+  if (moveError) throw new Error("The approved upload could not be moved into private document storage.");
+  const { error } = await (admin as unknown as SupabaseClient).rpc("register_promoted_private_document", { requested_intent_id: input.intentId, requested_title: input.title, requested_storage_path: finalPath });
+  if (error) {
+    await admin.storage.from("grassroots-private-files").move(finalPath, String(intent.storage_path), { destinationBucket: "grassroots-private-quarantine" });
+    throw new Error("The approved document could not be registered.");
+  }
   revalidatePath(`/app/${input.workspace}/documents`);
 }
 

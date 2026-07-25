@@ -30,6 +30,7 @@ function EventCard({ match = false }: { match?: boolean }) {
 }
 
 export function ParentCoreFootballScreen({ section }: { section: string }) {
+  if (section === "home") return <ParentHome />;
   if (section === "actions") return <ParentActions />;
   if (section === "schedule") return <ParentSchedule />;
   if (section === "event") return <ParentEvent />;
@@ -37,7 +38,16 @@ export function ParentCoreFootballScreen({ section }: { section: string }) {
   if (section === "polls") return <ParentPoll />;
   if (section === "squad") return <ParentSquad />;
   if (section === "announcements") return <ParentAnnouncements />;
+  if (section === "child") return <ParentChildDevelopment />;
   return null;
+}
+
+function ParentHome() {
+  return <section data-testid="parent-home" className="space-y-5" aria-labelledby="parent-home-title"><div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><div className={card}><Status tone="warning">One reply needed</Status><h2 className="mt-4 text-2xl font-semibold text-ink" id="parent-home-title">Jamie’s football week</h2><p className="mt-3 text-sm leading-6 text-muted">Reply for Sunday’s match, then check the updated meet time and main-pitch location.</p><Link className="mt-5 inline-flex min-h-11 items-center font-semibold text-primary-strong underline decoration-2 underline-offset-4" href="/app/riverside-juniors/availability?role=parent">Respond to availability</Link></div><EventCard match /></div><div><h2 className="mb-4 text-lg font-semibold text-ink">Coming up next</h2><EventCard /></div></section>;
+}
+
+function ParentChildDevelopment() {
+  return <section data-testid="parent-child" className="max-w-3xl" aria-labelledby="child-development-title"><div className={card}><Status tone="success">Approved development update</Status><h2 id="child-development-title" className="mt-4 text-xl font-semibold text-ink">Jamie’s progress</h2><p className="mt-3 text-sm leading-6 text-muted">Jamie showed brave passing choices, supported teammates and used both feet.</p><p className="mt-5 text-xs font-semibold text-muted">Approved by Sam Taylor · 10 August</p></div><p className="mt-4 text-sm leading-6 text-muted">You see only summaries that a coach has deliberately written or reviewed and approved for your linked child.</p></section>;
 }
 
 function ParentActions() {
