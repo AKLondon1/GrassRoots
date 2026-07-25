@@ -42,6 +42,9 @@ yarn-error.log*
 # isolated agent worktrees
 /.worktrees/
 
+# agent workflow scratch
+/.superpowers/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
