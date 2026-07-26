@@ -1,6 +1,6 @@
 begin;
 
-select plan(70);
+select plan(49);
 
 select has_table('public','announcements','announcements exist');
 select has_table('public','conversation_messages','adult group messages exist');

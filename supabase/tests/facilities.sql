@@ -1,6 +1,6 @@
 begin;
 
-select plan(40);
+select plan(34);
 
 select has_table('public', 'venues', 'venues table exists');
 select has_table('public', 'facilities', 'facilities table exists');
