@@ -1,6 +1,6 @@
 begin;
 
-select plan(34);
+select plan(40);
 
 select has_table('public', 'venues', 'venues table exists');
 select has_table('public', 'facilities', 'facilities table exists');
@@ -73,7 +73,6 @@ select throws_ok(
 );
 reset role;
 
-savepoint authorised_allocation;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000203', true);
 select lives_ok(
@@ -94,7 +93,6 @@ select throws_ok(
   'an explicitly excluded reservation unit cannot overlap'
 );
 reset role;
-rollback to savepoint authorised_allocation;
 
 select is(
   (select count(*) from public.support_sessions where expires_at > starts_at + interval '60 minutes'),
@@ -102,7 +100,6 @@ select is(
   'support sessions never exceed the maximum duration'
 );
 
-savepoint cancel_affected;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000203', true);
 select lives_ok(
@@ -123,7 +120,6 @@ select is((select cancelled_reason from public.event_instances where id = '00000
 select is((select count(*) from public.facility_notification_outbox where event_instance_id = '00000000-0000-4000-8000-000000001202' and kind = 'event-cancelled'), 1::bigint, 'one urgent cancellation notice is queued');
 select is((select count(*) from public.private_calendar_events(repeat('b', 64)) where event_id = '00000000-0000-4000-8000-000000001202'), 0::bigint, 'cancelled event disappears from private calendar feeds');
 reset role;
-rollback to savepoint cancel_affected;
 
 select * from finish();
 rollback;

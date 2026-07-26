@@ -1,6 +1,6 @@
 begin;
 
-select plan(13);
+select plan(14);
 
 select has_table('public', 'beta_auth_allowlist', 'beta account-creation allowlist exists');
 select has_function(
@@ -175,6 +175,10 @@ select is(
 select ok(
   not has_table_privilege('anon', 'public.beta_auth_allowlist', 'SELECT')
     and not has_table_privilege('authenticated', 'public.beta_auth_allowlist', 'SELECT')
+    and not has_table_privilege('supabase_auth_admin', 'public.beta_auth_allowlist', 'SELECT')
+    and not has_table_privilege('supabase_auth_admin', 'public.beta_auth_allowlist', 'INSERT')
+    and not has_table_privilege('supabase_auth_admin', 'public.beta_auth_allowlist', 'UPDATE')
+    and not has_table_privilege('supabase_auth_admin', 'public.beta_auth_allowlist', 'DELETE')
     and has_table_privilege('service_role', 'public.beta_auth_allowlist', 'SELECT')
     and has_table_privilege('service_role', 'public.beta_auth_allowlist', 'INSERT')
     and has_table_privilege('service_role', 'public.beta_auth_allowlist', 'UPDATE')
@@ -205,6 +209,10 @@ select ok(
         and privilege.privilege_type = 'EXECUTE'
     ),
   'only Supabase Auth can execute the account-creation hook'
+);
+select ok(
+  has_schema_privilege('supabase_auth_admin', 'public', 'USAGE'),
+  'Supabase Auth can resolve the account-creation hook through the public schema'
 );
 
 select * from finish();

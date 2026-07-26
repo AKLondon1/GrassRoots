@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 const migrationPath = "supabase/migrations/0018_beta_auth_allowlist.sql";
+const hookSchemaUsageMigrationPath =
+  "supabase/migrations/0019_beta_auth_hook_schema_usage.sql";
 
 describe("beta account-creation allowlist", () => {
   it("keeps pre-account Google access behind a private, expiring allowlist hook", async () => {
@@ -38,5 +40,14 @@ describe("beta account-creation allowlist", () => {
     expect(config).toContain(
       'uri = "pg-functions://postgres/public/hook_restrict_beta_signup"',
     );
+  });
+
+  it("lets only Supabase Auth resolve the hook through the public schema", async () => {
+    const migration = await readFile(hookSchemaUsageMigrationPath, "utf8");
+
+    expect(migration).toMatch(
+      /grant usage on schema public to supabase_auth_admin/i,
+    );
+    expect(migration).not.toMatch(/grant (?:all|select|insert|update|delete)/i);
   });
 });
