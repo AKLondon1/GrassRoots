@@ -74,29 +74,28 @@ describe("sign in", () => {
     expect(screen.getByRole("link", { name: "Platform demo" })).toBeInTheDocument();
   });
 
-  it("renders the real email magic-link form only in Supabase mode", () => {
-    render(<SignInScreen mode="supabase" />);
-
-    expect(screen.getByLabelText("Email address")).toHaveAttribute("type", "email");
-    expect(
-      screen.getByRole("button", { name: "Email me a sign-in link" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /demo/i })).not.toBeInTheDocument();
-  });
-
-  it("preserves a safe invitation return path through magic-link sign in", () => {
+  it("renders Google sign-in without email or demo controls in Supabase mode", () => {
     render(<SignInScreen mode="supabase" nextPath="/invite/raw-token" />);
 
     expect(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    ).toBeInTheDocument();
+    expect(
       document.querySelector('input[name="next"]'),
     ).toHaveAttribute("value", "/invite/raw-token");
+    expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /demo/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/prior approval or a valid GrassRoots club invitation/i),
+    ).toBeVisible();
+    expect(screen.getByText(/club invitation is still required/i)).toBeVisible();
   });
 
-  it("shows an honest callback error", () => {
-    render(<SignInScreen callbackError mode="supabase" />);
+  it("shows a provider-specific recoverable error", () => {
+    render(<SignInScreen authError="provider" mode="supabase" />);
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      /sign-in link could not be completed/i,
+      /Google sign-in could not be started/i,
     );
   });
 

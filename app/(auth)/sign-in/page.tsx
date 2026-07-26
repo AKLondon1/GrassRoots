@@ -21,10 +21,16 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const query = await searchParams;
   const error = Array.isArray(query.error) ? query.error[0] : query.error;
   const requestedNext = Array.isArray(query.next) ? query.next[0] : query.next;
+  const authError =
+    error === "callback" ||
+    error === "provider" ||
+    error === "session-revoked"
+      ? error
+      : undefined;
 
   return (
     <SignInScreen
-      callbackError={error === "callback"}
+      authError={authError}
       mode={environment.dataMode}
       nextPath={normaliseInternalPath(requestedNext)}
     />

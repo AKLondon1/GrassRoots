@@ -1,7 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
-import { MagicLinkForm } from "@/components/auth/magic-link-form";
+import { GoogleSignInForm } from "@/components/auth/google-sign-in-form";
 import { Button } from "@/components/ui/button";
 import { brand } from "@/lib/brand";
 import { listDemoSessions } from "@/lib/demo/session";
@@ -20,16 +20,25 @@ const demoLabels: Record<AppRole, string> = {
 };
 
 interface SignInScreenProps {
-  callbackError?: boolean;
+  authError?: "callback" | "provider" | "session-revoked";
   mode: DataMode;
   nextPath?: string;
 }
 
 export function SignInScreen({
-  callbackError = false,
+  authError,
   mode,
   nextPath = "/",
 }: SignInScreenProps) {
+  const authErrorMessage =
+    authError === "provider"
+      ? "Google sign-in could not be started. Try again in a moment."
+      : authError === "session-revoked"
+        ? "Your session ended securely. Sign in again to continue."
+        : authError === "callback"
+          ? "That sign-in could not be completed. Start again and try once more."
+          : null;
+
   return (
     <main className="min-h-dvh bg-surface px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto flex w-full max-w-5xl flex-col">
@@ -72,21 +81,23 @@ export function SignInScreen({
               Sign in to {brand.name}
             </h1>
 
-            {callbackError ? (
+            {authErrorMessage ? (
               <p
                 className="mt-5 rounded-[10px] bg-danger-soft px-4 py-3 text-sm font-medium text-danger-strong"
                 role="alert"
               >
-                That sign-in link could not be completed. Request a fresh link and try again.
+                {authErrorMessage}
               </p>
             ) : null}
 
             {mode === "supabase" ? (
               <>
                 <p className="mt-4 max-w-[55ch] text-sm leading-6 text-muted">
-                  We will email you a single-use link. No password is needed.
+                  Continue with your adult Google account. This private beta requires prior
+                  approval or a valid GrassRoots club invitation. A club invitation is still
+                  required before you can access an organisation workspace.
                 </p>
-                <MagicLinkForm nextPath={nextPath} />
+                <GoogleSignInForm nextPath={nextPath} />
               </>
             ) : (
               <>
