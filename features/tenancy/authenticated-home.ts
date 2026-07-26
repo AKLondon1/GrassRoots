@@ -1,99 +1,88 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
-  getDefaultScreen,
+  getAllowedScreensForRole,
   getScreenHref,
-  type AppRole,
 } from "@/lib/navigation/screen-registry";
 import type { Database } from "@/lib/supabase/types";
 
+import {
+  createSupabaseTenancyAccessReader,
+  resolveProductionWorkspaceAccess,
+  type ProductionWorkspaceAccess,
+} from "./service";
+
 export interface AuthenticatedHomeReader {
-  findFirstActiveWorkspace(
+  listCandidateWorkspaces(userId: string): Promise<readonly string[]>;
+  resolveWorkspaceAccess(
+    workspace: string,
     userId: string,
-  ): Promise<{ workspace: string; roleKey: string } | null>;
+  ): Promise<ProductionWorkspaceAccess>;
 }
 
-function roleForKey(key: string): AppRole {
-  if (key === "parent" || key === "guardian") return "parent";
-  if (key === "coach" || key === "manager") return "coach";
-  if (key === "platform-owner" || key === "platform-operator") return "platform";
-  return "club";
-}
+function getProductionScreenHref(
+  workspace: string,
+  access: Extract<ProductionWorkspaceAccess, { status: "allowed" }>,
+): string | null {
+  const screen = getAllowedScreensForRole(access.role, access.capabilities)[0];
+  if (!screen) return null;
 
-function getProductionScreenHref(workspace: string, role: AppRole): string {
-  return getScreenHref(workspace, getDefaultScreen(role), role).split("?")[0];
+  return getScreenHref(workspace, screen, access.role).split("?")[0];
 }
 
 export async function resolveAuthenticatedHome(
   reader: AuthenticatedHomeReader,
   userId: string,
 ) {
-  const target = await reader.findFirstActiveWorkspace(userId);
-  if (!target) return { status: "invitation-required" } as const;
+  const workspaces = await reader.listCandidateWorkspaces(userId);
 
-  const role = roleForKey(target.roleKey);
-  return {
-    status: "allowed",
-    href: getProductionScreenHref(target.workspace, role),
-  } as const;
+  for (const workspace of workspaces) {
+    const access = await reader.resolveWorkspaceAccess(workspace, userId);
+    if (access.status !== "allowed") continue;
+
+    const href = getProductionScreenHref(workspace, access);
+    if (href) return { status: "allowed", href } as const;
+  }
+
+  return { status: "invitation-required" } as const;
 }
 
 export function createSupabaseAuthenticatedHomeReader(
   client: SupabaseClient<Database>,
 ): AuthenticatedHomeReader {
+  const tenancyReader = createSupabaseTenancyAccessReader(client);
+
   return {
-    async findFirstActiveWorkspace(userId) {
+    async listCandidateWorkspaces(userId) {
       const database = client as unknown as SupabaseClient;
       const { data: memberships, error: membershipError } = await database
         .from("memberships")
-        .select("id, organisation_id, joined_at")
+        .select("organisation_id, joined_at")
         .eq("user_id", userId)
         .eq("status", "active")
-        .order("joined_at", { ascending: true })
-        .limit(20);
+        .order("joined_at", { ascending: true });
       if (membershipError) throw new Error("Could not resolve account access.");
 
-      for (const membership of memberships ?? []) {
-        const [
-          { data: organisation, error: organisationError },
-          { data: assignment, error: assignmentError },
-        ] = await Promise.all([
-          database
+      const organisationIds = (memberships ?? []).map(({ organisation_id }) =>
+        String(organisation_id),
+      );
+      const organisations = await Promise.all(
+        organisationIds.map(async (organisationId) => {
+          const { data, error } = await database
             .from("organisations")
             .select("slug")
-            .eq("id", membership.organisation_id)
+            .eq("id", organisationId)
             .eq("status", "active")
-            .maybeSingle(),
-          database
-            .from("scoped_role_assignments")
-            .select("role_id")
-            .eq("organisation_id", membership.organisation_id)
-            .eq("membership_id", membership.id)
-            .order("created_at", { ascending: true })
-            .limit(1)
-            .maybeSingle(),
-        ]);
-        if (organisationError || assignmentError) {
-          throw new Error("Could not resolve account access.");
-        }
-        if (!organisation || !assignment) continue;
+            .maybeSingle();
+          if (error) throw new Error("Could not resolve account access.");
+          return data ? String(data.slug) : null;
+        }),
+      );
 
-        const { data: role, error: roleError } = await database
-          .from("roles")
-          .select("key")
-          .eq("organisation_id", membership.organisation_id)
-          .eq("id", assignment.role_id)
-          .maybeSingle();
-        if (roleError) throw new Error("Could not resolve account access.");
-        if (role) {
-          return {
-            workspace: String(organisation.slug),
-            roleKey: String(role.key),
-          };
-        }
-      }
-
-      return null;
+      return [...new Set(organisations.filter((slug): slug is string => slug !== null))];
+    },
+    resolveWorkspaceAccess(workspace, userId) {
+      return resolveProductionWorkspaceAccess(tenancyReader, workspace, userId);
     },
   };
 }
