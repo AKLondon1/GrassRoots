@@ -23,8 +23,8 @@ CRON_SECRET=<32-or-more-random-server-only-characters>
 
 Replace the `APP_ORIGIN` example with the exact HTTPS URL returned by the
 production Vercel deployment. It must be one canonical origin, with no wildcard,
-preview URL, path or trailing slash. Use the same exact origin in Supabase Site
-URL and redirect settings. `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` are
+preview URL, credentials, port, path, query, hash or trailing slash. Use the same
+exact origin in Supabase Site URL and redirect settings. `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` are
 server-only secrets: never put them in Git, `NEXT_PUBLIC_*` variables, browser
 code or terminal output. Keep `RESEND_API_KEY`, `EMAIL_FROM`, Stripe, OpenAI,
 push and scanner variables unset for this beta.
@@ -32,11 +32,12 @@ push and scanner variables unset for this beta.
 ### Supabase and Google OAuth
 
 1. In Google Cloud, create a Web application OAuth client for the beta.
-2. Set its only authorised redirect URI to `https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback`.
-3. In the Supabase project's Google provider settings, enable Google and enter the Google client ID and secret. The client secret stays in Google/Supabase configuration, not this repository or Vercel browser-readable variables.
-4. In Supabase Auth URL configuration, set Site URL to the exact `APP_ORIGIN` from Vercel. Add the exact production callback URL, `https://<the-exact-production-project>.vercel.app/auth/callback`, and retain `http://localhost:3000/auth/callback` for local development. Do not configure a production wildcard callback.
-5. Enable the hosted Supabase **Before User Created** hook with the function `public.hook_restrict_beta_signup`. This database function is supplied by migration `0018_beta_auth_allowlist.sql`; applying the migration does not by itself enable the hosted Auth hook.
-6. Before the first sign-in, use the protected Supabase administration path to insert the initial owner's normalised email in `beta_auth_allowlist` with a future expiry. Do not put that address in Git, this documentation, an environment variable or browser code. A private SQL-editor session can use this shape, replacing the placeholder only in that protected session:
+2. Under **Authorized JavaScript origins**, add the exact production `APP_ORIGIN` (for example, `https://<the-exact-production-project>.vercel.app`) and `http://localhost:3000` for local development. These are origins only: no paths, wildcards, query strings, hashes or credentials. The production entry has no port; local development uses exactly port `3000`.
+3. Under **Authorized redirect URIs**, add the exact Supabase callback `https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback`. Do not add a Vercel URL or a wildcard to this Google field; Supabase completes the provider callback before returning to the application.
+4. In the Supabase project's Google provider settings, enable Google and enter the Google client ID and secret. The client secret stays in Google/Supabase configuration, not this repository or Vercel browser-readable variables.
+5. In Supabase Auth URL configuration, set Site URL to the exact `APP_ORIGIN` from Vercel. Add the exact production callback URL, `https://<the-exact-production-project>.vercel.app/auth/callback`, and retain `http://localhost:3000/auth/callback` for local development. Do not configure a production wildcard callback.
+6. Enable the hosted Supabase **Before User Created** hook with the function `public.hook_restrict_beta_signup`. This database function is supplied by migration `0018_beta_auth_allowlist.sql`; applying the migration does not by itself enable the hosted Auth hook.
+7. Before the first sign-in, use the protected Supabase administration path to insert the initial owner's normalised email in `beta_auth_allowlist` with a future expiry. Do not put that address in Git, this documentation, an environment variable or browser code. A private SQL-editor session can use this shape, replacing the placeholder only in that protected session:
 
 ```sql
 insert into public.beta_auth_allowlist (email, expires_at, operator_note)

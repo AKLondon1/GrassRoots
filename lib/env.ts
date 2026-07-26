@@ -35,6 +35,19 @@ const rawEnvironmentSchema = z.object({
 
 export type EnvironmentInput = Record<string, string | undefined>;
 
+function isCanonicalHttpsOrigin(value: string) {
+  const url = new URL(value);
+
+  return (
+    url.protocol === "https:" &&
+    url.username === "" &&
+    url.password === "" &&
+    url.port === "" &&
+    !url.hostname.includes("*") &&
+    value === url.origin
+  );
+}
+
 export function parseEnvironment(input: EnvironmentInput) {
   const raw = rawEnvironmentSchema.parse(input);
   const hasUrl = Boolean(raw.NEXT_PUBLIC_SUPABASE_URL);
@@ -46,7 +59,10 @@ export function parseEnvironment(input: EnvironmentInput) {
     );
   }
 
-  if (raw.NODE_ENV === "production" && (!raw.APP_ORIGIN || new URL(raw.APP_ORIGIN).protocol !== "https:")) {
+  if (
+    raw.NODE_ENV === "production" &&
+    (!raw.APP_ORIGIN || !isCanonicalHttpsOrigin(raw.APP_ORIGIN))
+  ) {
     throw new Error("Production requires APP_ORIGIN to be the canonical HTTPS origin.");
   }
 

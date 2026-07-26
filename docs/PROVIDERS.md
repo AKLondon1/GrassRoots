@@ -3,7 +3,7 @@
 | Capability | Development behaviour | Production requirement |
 |---|---|---|
 | Database/Auth/Storage | explicit fictional demo or Supabase | Supabase project, URL, anon key and server-only service role |
-| Beta authentication | Google OAuth configured in Supabase Auth | Google Web client with the Supabase callback URI; exact Vercel origin; hosted `public.hook_restrict_beta_signup`; private expiring owner allowlist or a pending invitation |
+| Beta authentication | Google OAuth configured in Supabase Auth | Google Web client with exact **Authorized JavaScript origins** for the production Vercel `APP_ORIGIN` and `http://localhost:3000`, plus the exact Supabase **Authorized redirect URI** `https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback`; no wildcard or path; hosted `public.hook_restrict_beta_signup`; private expiring owner allowlist or a pending invitation |
 | Email | Disabled for the shareable beta; no magic-link UI is presented | A verified custom sending domain, Resend API key, verified `EMAIL_FROM`, approved sender/domain and delivery monitoring |
 | Push | preference/subscription-gated announcement delivery retries until configured | authenticated HTTPS adapter, browser subscription registration and delivery monitoring |
 | SMS/WhatsApp | unavailable, never simulated as sent | approved account, templates, pricing and opt-out handling |

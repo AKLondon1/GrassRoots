@@ -37,6 +37,34 @@ describe("parseEnvironment", () => {
     expect(() => parseEnvironment({ NODE_ENV: "production", NEXT_PUBLIC_DATA_MODE: "supabase", APP_ORIGIN: "https://grassroots.example", NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon", SUPABASE_SERVICE_ROLE_KEY: "s".repeat(40) })).toThrow(/CRON_SECRET/);
   });
 
+  it.each([
+    "https://grassroots.example/app",
+    "https://grassroots.example?source=beta",
+    "https://grassroots.example#sign-in",
+    "https://grassroots.example/",
+    "https://*.vercel.app",
+    "https://operator:secret@grassroots.example",
+    "https://grassroots.example:8443",
+  ])("rejects a non-canonical production APP_ORIGIN: %s", (appOrigin) => {
+    expect(() =>
+      parseEnvironment({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_DATA_MODE: "demo",
+        APP_ORIGIN: appOrigin,
+      }),
+    ).toThrow(/canonical HTTPS origin/);
+  });
+
+  it("accepts a canonical HTTPS production APP_ORIGIN", () => {
+    expect(
+      parseEnvironment({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_DATA_MODE: "demo",
+        APP_ORIGIN: "https://grassroots-beta.vercel.app",
+      }).server.APP_ORIGIN,
+    ).toBe("https://grassroots-beta.vercel.app");
+  });
+
   it("accepts a Supabase beta without email provider credentials", () => {
     const environment = parseEnvironment({
       NODE_ENV: "production",
