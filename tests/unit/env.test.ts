@@ -37,6 +37,22 @@ describe("parseEnvironment", () => {
     expect(() => parseEnvironment({ NODE_ENV: "production", NEXT_PUBLIC_DATA_MODE: "supabase", APP_ORIGIN: "https://grassroots.example", NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon", SUPABASE_SERVICE_ROLE_KEY: "s".repeat(40) })).toThrow(/CRON_SECRET/);
   });
 
+  it("accepts a Supabase beta without email provider credentials", () => {
+    const environment = parseEnvironment({
+      NODE_ENV: "production",
+      NEXT_PUBLIC_DATA_MODE: "supabase",
+      APP_ORIGIN: "https://grassroots-beta.vercel.app",
+      NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
+      SUPABASE_SERVICE_ROLE_KEY: "s".repeat(32),
+      CRON_SECRET: "c".repeat(32),
+    });
+
+    expect(environment.dataMode).toBe("supabase");
+    expect(environment.server.RESEND_API_KEY).toBeUndefined();
+    expect(environment.server.EMAIL_FROM).toBeUndefined();
+  });
+
   it("requires provider credential pairs and an API key for enabled coaching assistance", () => {
     expect(() => parseEnvironment({ NODE_ENV: "test", STRIPE_SECRET_KEY: "sk_test_1234567890123456" })).toThrow(/configured together/);
     expect(() => parseEnvironment({ NODE_ENV: "test", OPENAI_COACHING_ENABLED: "true" })).toThrow(/OPENAI_API_KEY/);
