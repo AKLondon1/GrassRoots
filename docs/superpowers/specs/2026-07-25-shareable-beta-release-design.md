@@ -34,23 +34,31 @@ review.
 1. A visitor opens the Vercel production URL and chooses **Continue with Google**.
 2. GrassRoots validates any requested return path and starts Supabase Google
    OAuth with a callback on the current canonical application origin.
-3. Google authenticates the adult. Supabase returns the user to
+3. Before Supabase creates a new user, its **Before User Created** hook permits
+   only a Google identity whose normalised email has an unexpired private beta
+   allowlist entry or a pending, unexpired GrassRoots invitation. A brand-new
+   unapproved identity receives one generic denial and no Auth user is created.
+4. Google authenticates the approved adult. Supabase returns the user to
    `/auth/callback`.
-4. The callback exchanges the OAuth code for a server-side Supabase session.
-5. GrassRoots resolves active organisation memberships for the authenticated
+5. The callback exchanges the OAuth code for a server-side Supabase session.
+6. GrassRoots resolves active organisation memberships for the authenticated
    user:
    - a user with an active membership continues to the requested authorised
      screen or their default workspace;
-   - an authenticated user without a membership sees a truthful
+   - an existing authenticated user without a membership sees a truthful
      invitation-required state and receives no organisation data;
    - a user following a valid invitation can accept it only after
      authenticating, after which existing RLS and membership checks grant the
      intended scoped access.
-6. Invalid, expired or already-used invitations fail safely without revealing
+7. Invalid, expired or already-used invitations fail safely without revealing
    organisation or membership details.
 
 Children never authenticate. Google identity proves the adult session but does
 not itself grant any GrassRoots role or organisation access.
+
+The account-creation hook is a separate, fail-closed beta boundary. It does not
+change sessions for existing users, membership authorisation or existing RLS
+policies.
 
 ## Interface Changes
 
@@ -94,6 +102,12 @@ Supabase Auth URL configuration permits:
 - the exact Vercel production origin and its `/auth/callback` route;
 - localhost callback URLs required for development.
 
+The hosted Supabase project also enables the **Before User Created** hook at
+`public.hook_restrict_beta_signup`. Before the first release, an operator adds
+the initial owner email directly to `beta_auth_allowlist` with an expiry through
+the protected Supabase administration path. The address is never committed to
+Git, added to a client variable or placed in deployment documentation.
+
 Wildcards are not used for the production origin. Existing migrations and RLS
 policies remain the authority for data access.
 
@@ -107,6 +121,8 @@ only as a server-side deployment secret.
 ## Security and Privacy
 
 - OAuth return paths are normalised to same-origin internal paths.
+- A new Supabase Auth identity is created only for an approved Google email;
+  the hook returns the same generic 403 response for every refusal.
 - Organisation access is derived from authenticated memberships, never Google
   profile claims or client input.
 - Uninvited users cannot enumerate organisations, people or invitations.
@@ -122,8 +138,9 @@ only as a server-side deployment secret.
 
 - OAuth cancellation or provider failure returns a recoverable sign-in error.
 - A missing or malformed OAuth code fails closed.
-- A valid login without GrassRoots membership shows the invitation-required
-  state.
+- A valid existing login without GrassRoots membership shows the
+  invitation-required state; a brand-new unapproved Google identity is rejected
+  before account creation.
 - An invalid invitation remains unusable and reveals no private club data.
 - Missing Google provider configuration causes a clear unavailable state rather
   than silently offering a broken action.
@@ -137,8 +154,8 @@ Before deployment:
 1. Run lint, TypeScript, Vitest, permission/security suites and the production
    build.
 2. Verify server-action export rules and Supabase-mode environment validation.
-3. Test OAuth initiation, callback validation, safe return paths, sign-out and
-   uninvited-user handling.
+3. Test OAuth initiation, callback validation, safe return paths, sign-out,
+   uninvited existing-user handling and the pre-creation allowlist hook.
 4. Run Playwright critical journeys across mobile, tablet and desktop using a
    controlled authenticated test boundary where live Google automation is not
    appropriate.
@@ -149,7 +166,9 @@ After deployment:
 1. Verify the public landing page, sign-in page and health endpoint at the
    Vercel production URL.
 2. Complete one real Google sign-in using an invited adult test account.
-3. Confirm an uninvited Google account receives no workspace access.
+3. Confirm a brand-new unapproved Google account is denied before account
+   creation, while an existing user without membership receives no workspace
+   access.
 4. Confirm sign-out ends the session and protected routes redirect safely.
 5. Record the deployed URL and provider configuration in release documentation.
 

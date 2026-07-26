@@ -4,7 +4,7 @@
 
 **Goal:** Release GrassRoots as a shareable, non-commercial Vercel beta using the real Supabase database, Google OAuth and invitation-gated organisation access.
 
-**Architecture:** A server action starts Supabase Google OAuth with a canonical, same-origin callback. The existing callback exchanges the PKCE code and sends the adult to a new authenticated `/app` entry route, which selects an active membership or renders an invitation-required state; existing workspace RLS remains authoritative. Vercel Hobby hosts the beta, while Google OAuth is configured in Supabase and Resend remains disabled.
+**Architecture:** A server action starts Supabase Google OAuth with a canonical, same-origin callback. Supabase's Before User Created hook fails closed unless the new Google email is on a private expiring beta allowlist or has a live invitation. The existing callback exchanges the PKCE code and sends an authenticated adult to a new `/app` entry route, which selects an active membership or renders an invitation-required state for an existing user without membership; existing workspace RLS remains authoritative. Vercel Hobby hosts the beta, while Google OAuth is configured in Supabase and Resend remains disabled.
 
 **Tech Stack:** Next.js 16.2.11 App Router, React 19.2.4, TypeScript 5, Supabase Auth/SSR 2.110.7/0.12.3, Tailwind CSS 4, Vitest 4.1.10, Playwright 1.61.1, Vercel Hobby.
 
@@ -13,6 +13,9 @@
 - The deployed beta must use `NEXT_PUBLIC_DATA_MODE=supabase`; demo mode must never be used by the public deployment.
 - Children never authenticate.
 - Google identity must not grant a role or organisation membership.
+- Brand-new Google identities must be denied before Auth-user creation unless
+  their normalised email is explicitly allowlisted or has a pending, unexpired
+  organisation invitation.
 - Production OAuth redirects must use the exact HTTPS Vercel production origin; no production wildcard redirect is allowed.
 - Email magic-link implementation remains in the repository but is not presented while email delivery is unconfigured.
 - Resend remains disabled and the previously disclosed API key must be revoked.
@@ -22,6 +25,10 @@
 ## File Structure
 
 - Create `lib/supabase/oauth.ts`: pure construction and validation of the Google OAuth request.
+- Create `supabase/migrations/0018_beta_auth_allowlist.sql`: private expiring
+  allowlist and Before User Created hook for new beta accounts.
+- Create `supabase/tests/beta_auth_allowlist.sql`: pgTAP coverage for allow,
+  deny and privilege boundaries of the account-creation hook.
 - Modify `app/(auth)/sign-in/actions.ts`: expose only the async Google OAuth server action in addition to retained magic-link actions.
 - Create `components/auth/google-sign-in-form.tsx`: accessible pending/error form for the Google action.
 - Modify `components/auth/sign-in-screen.tsx`: present Google OAuth in Supabase mode and keep demo entry points unchanged.
@@ -744,8 +751,12 @@ Document these account-level actions:
 3. Set the authorised redirect URI to
    `https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback`.
 4. Add the Google client ID and secret to the Supabase Google provider.
-5. Set Supabase Site URL to the exact Vercel production origin.
-6. Add the exact Vercel `/auth/callback` URL and localhost callback URL to
+5. Enable the **Before User Created** hook using
+   `public.hook_restrict_beta_signup`, then securely insert the initial owner
+   email into `beta_auth_allowlist` with an expiry. Do not put that address in
+   Git, documentation or a client variable.
+6. Set Supabase Site URL to the exact Vercel production origin.
+7. Add the exact Vercel `/auth/callback` URL and localhost callback URL to
    Supabase redirect allowlists.
 
 - [ ] **Step 4: Verify documentation and configuration**
@@ -885,6 +896,11 @@ https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback
 In the Supabase GrassRoots project:
 
 - enable Google and enter that client ID/secret;
+- enable the **Before User Created** hook at
+  `public.hook_restrict_beta_signup`;
+- add the first adult owner email to `beta_auth_allowlist` with a bounded
+  expiry through the protected administration path, never through Git or a
+  browser-readable variable;
 - set Site URL to the exact Vercel production origin;
 - allow the exact production `/auth/callback` URL;
 - retain `http://localhost:3000/auth/callback` for local development;
@@ -905,8 +921,10 @@ GET /app                      -> redirects to /sign-in when signed out
 ```
 
 Complete one real Google sign-in with an invited adult and confirm workspace
-access. Complete one real Google sign-in without an invitation and confirm the
-invitation-required state. Sign out and confirm the private route redirects.
+access. Complete one real sign-in for a brand-new unapproved Google identity
+and confirm that Supabase rejects it before creating an account. Confirm an
+existing user without membership sees the invitation-required state. Sign out
+and confirm the private route redirects.
 
 - [ ] **Step 9: Record release evidence**
 
