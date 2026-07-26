@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --background: var(--brand-background);
+  --surface: var(--brand-surface);
+  --surface-strong: var(--brand-surface-strong);
+  --ink: var(--brand-ink);
+  --ink-raised: var(--brand-ink-raised);
+  --ink-on-dark-muted: var(--brand-ink-on-dark-muted);
+  --muted: var(--brand-muted);
+  --primary: var(--brand-primary);
+  --primary-strong: var(--brand-primary-strong);
+  --primary-light: var(--brand-primary-light);
+  --primary-foreground: var(--brand-primary-foreground);
+  --accent: var(--brand-accent);
+  --success: oklch(0.58 0.13 145);
+  --success-strong: oklch(0.39 0.1 145);
+  --success-soft: oklch(0.94 0.035 145);
+  --warning: oklch(0.72 0.14 72);
+  --warning-strong: oklch(0.39 0.085 72);
+  --warning-soft: oklch(0.95 0.045 72);
+  --danger: oklch(0.56 0.17 28);
+  --danger-strong: oklch(0.43 0.15 28);
+  --danger-soft: oklch(0.95 0.035 28);
+  --info: oklch(0.58 0.11 245);
+  --info-strong: oklch(0.4 0.1 245);
+  --info-soft: oklch(0.95 0.03 245);
+  --border: var(--brand-border);
+  --border-strong: var(--brand-border-strong);
+  --border-on-dark: var(--brand-border-on-dark);
+  --ring: var(--brand-ring);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --z-dropdown: 20;
+  --z-sticky: 30;
+  --z-modal-backdrop: 40;
+  --z-modal: 45;
+  --z-toast: 50;
+  --z-tooltip: 60;
+}
+
+.z-toast {
+  z-index: var(--z-toast);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-ink: var(--ink);
+  --color-ink-raised: var(--ink-raised);
+  --color-ink-on-dark-muted: var(--ink-on-dark-muted);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-light: var(--primary-light);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-strong: var(--info-strong);
+  --color-info-soft: var(--info-soft);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-on-dark: var(--border-on-dark);
+  --color-ring: var(--ring);
+  --font-sans: "Geist", "Segoe UI", Arial, sans-serif;
+  --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 1rem;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--primary-strong);
+  color: var(--primary-foreground);
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.6s var(--ease-out-quint) infinite alternate;
+}
+
+@keyframes skeleton-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (pointer: coarse) {
+  .glowing-effect {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .container-scroll-card,
+  .container-scroll-motion {
+    transform: none !important;
+  }
+}

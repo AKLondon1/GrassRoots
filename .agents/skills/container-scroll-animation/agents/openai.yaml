@@ -1,0 +1,4 @@
+interface:
+  display_name: "Container Scroll Animation"
+  short_description: "Build perspective-driven scroll animations"
+  default_prompt: "Use $container-scroll-animation to add a responsive perspective scroll reveal to this React interface."
