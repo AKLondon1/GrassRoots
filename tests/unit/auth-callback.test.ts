@@ -26,6 +26,15 @@ describe("Supabase auth callback", () => {
     expect(exchangeCode).toHaveBeenCalledWith("secure-code");
   });
 
+  it("routes a successful callback without a return path to authenticated home", async () => {
+    await expect(
+      completeAuthCallback(
+        "https://grassroots-beta.vercel.app/auth/callback?code=secure-code",
+        async () => ({ error: null }),
+      ),
+    ).resolves.toEqual({ destination: "/app", status: "success" });
+  });
+
   it("rejects external redirects and reports a failed exchange", async () => {
     const exchangeCode = vi.fn().mockResolvedValue({
       error: { message: "expired" },
@@ -47,6 +56,6 @@ describe("Supabase auth callback", () => {
         "https://grassroots.example/auth/callback?code=ok&next=%2F%5Cevil.example",
         exchangeCode,
       ),
-    ).resolves.toEqual({ destination: "/", status: "success" });
+    ).resolves.toEqual({ destination: "/app", status: "success" });
   });
 });

@@ -42,8 +42,9 @@ export async function completeAuthCallback(
     return { destination: "/sign-in?error=callback", status: "error" };
   }
 
+  const destination = normaliseInternalPath(url.searchParams.get("next"));
   return {
-    destination: normaliseInternalPath(url.searchParams.get("next")),
+    destination: destination === "/" ? "/app" : destination,
     status: "success",
   };
 }
