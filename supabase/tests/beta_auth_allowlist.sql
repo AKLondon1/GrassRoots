@@ -26,13 +26,13 @@ values (
   'Beta Hook Role'
 );
 
-insert into public.beta_auth_allowlist (email, expires_at, operator_note)
+insert into public.beta_auth_allowlist (email, expires_at, operator_note, created_at)
 values
-  ('allowlisted-adult@example.test', now() + interval '1 day', 'pgTAP explicit allow'),
-  ('expired-adult@example.test', now() - interval '1 hour', 'pgTAP expired allow');
+  ('allowlisted-adult@example.test', now() + interval '1 day', 'pgTAP explicit allow', now() - interval '1 hour'),
+  ('expired-adult@example.test', now() - interval '1 hour', 'pgTAP expired allow', now() - interval '2 hours');
 
 insert into public.organisation_invites (
-  organisation_id, email, role_id, scope_kind, scope_id, token_digest, expires_at, accepted_at
+  organisation_id, email, role_id, scope_kind, scope_id, token_digest, expires_at, accepted_at, created_at
 )
 values
   (
@@ -43,7 +43,8 @@ values
     '00000000-0000-4000-8000-000000019101',
     repeat('1', 64),
     now() + interval '1 day',
-    null
+    null,
+    now() - interval '1 hour'
   ),
   (
     '00000000-0000-4000-8000-000000019101',
@@ -53,7 +54,8 @@ values
     '00000000-0000-4000-8000-000000019101',
     repeat('2', 64),
     now() + interval '1 day',
-    now()
+    now(),
+    now() - interval '1 hour'
   ),
   (
     '00000000-0000-4000-8000-000000019101',
@@ -63,7 +65,8 @@ values
     '00000000-0000-4000-8000-000000019101',
     repeat('3', 64),
     now() - interval '1 hour',
-    null
+    null,
+    now() - interval '2 hours'
   );
 
 select is(
@@ -73,7 +76,8 @@ select is(
         'email', ' Allowlisted-Adult@Example.Test ',
         'app_metadata', jsonb_build_object('provider', 'google')
       )
-    ) -> 'error',
+    )
+  ) -> 'error',
   null,
   'an active explicit allowlist entry permits Google account creation'
 );
@@ -84,7 +88,8 @@ select is(
         'email', 'invited-adult@example.test',
         'app_metadata', jsonb_build_object('provider', 'google')
       )
-    ) -> 'error',
+    )
+  ) -> 'error',
   null,
   'an unaccepted unexpired invitation permits Google account creation'
 );
@@ -95,7 +100,8 @@ select is(
         'email', 'expired-adult@example.test',
         'app_metadata', jsonb_build_object('provider', 'google')
       )
-    ) #>> '{error,http_code}',
+    )
+  ) #>> '{error,http_code}',
   '403',
   'an expired explicit allowlist entry is denied'
 );
@@ -106,7 +112,8 @@ select is(
         'email', 'accepted-adult@example.test',
         'app_metadata', jsonb_build_object('provider', 'google')
       )
-    ) #>> '{error,http_code}',
+    )
+  ) #>> '{error,http_code}',
   '403',
   'an accepted invitation is denied'
 );
@@ -117,7 +124,8 @@ select is(
         'email', 'expired-invitee@example.test',
         'app_metadata', jsonb_build_object('provider', 'google')
       )
-    ) #>> '{error,http_code}',
+    )
+  ) #>> '{error,http_code}',
   '403',
   'an expired invitation is denied'
 );
@@ -128,7 +136,8 @@ select is(
         'email', 'allowlisted-adult@example.test',
         'app_metadata', jsonb_build_object('provider', 'github')
       )
-    ) #>> '{error,http_code}',
+    )
+  ) #>> '{error,http_code}',
   '403',
   'a non-Google provider is denied even for an allowlisted address'
 );
