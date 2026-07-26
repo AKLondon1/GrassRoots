@@ -6,8 +6,57 @@ import {
   type MagicLinkSender,
 } from "@/app/(auth)/sign-in/actions";
 import { SignInScreen } from "@/components/auth/sign-in-screen";
+import { buildGoogleOAuthRequest } from "@/lib/supabase/oauth";
 
 describe("sign in", () => {
+  it("builds a Google callback from the configured canonical origin", () => {
+    expect(
+      buildGoogleOAuthRequest(
+        "https://grassroots-beta.vercel.app",
+        "/invite/secure-token",
+        "https://grassroots-beta.vercel.app",
+        "production",
+      ),
+    ).toEqual({
+      nextPath: "/invite/secure-token",
+      redirectTo:
+        "https://grassroots-beta.vercel.app/auth/callback?next=%2Finvite%2Fsecure-token",
+    });
+  });
+
+  it("rejects missing canonical origin in production", () => {
+    expect(
+      buildGoogleOAuthRequest(
+        "https://grassroots-beta.vercel.app",
+        "/app",
+        undefined,
+        "production",
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a mismatched request origin in production", () => {
+    expect(
+      buildGoogleOAuthRequest(
+        "https://attacker.example",
+        "/app",
+        "https://grassroots-beta.vercel.app",
+        "production",
+      ),
+    ).toBeNull();
+  });
+
+  it("normalises an external OAuth return path", () => {
+    expect(
+      buildGoogleOAuthRequest(
+        "http://localhost:3000",
+        "https://attacker.example",
+        "http://localhost:3000",
+        "development",
+      )?.nextPath,
+    ).toBe("/");
+  });
+
   it("shows visibly labelled adult demo role entry links in demo mode", () => {
     render(<SignInScreen mode="demo" />);
 

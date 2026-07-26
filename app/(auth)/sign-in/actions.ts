@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { environment } from "@/lib/env";
 import { trustedClientIdentifier } from "@/lib/security/request";
@@ -9,6 +10,7 @@ import { consumeDistributedRateLimit } from "@/lib/security/server-rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normaliseInternalPath } from "@/lib/supabase/auth-callback";
+import { buildGoogleOAuthRequest } from "@/lib/supabase/oauth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { DataMode } from "@/lib/supabase/types";
 
@@ -30,6 +32,37 @@ export type MagicLinkSender = (
   email: string,
   emailRedirectTo?: string,
 ) => Promise<{ error: { message: string } | null }>;
+
+export async function signInWithGoogle(formData: FormData): Promise<void> {
+  const requestHeaders = await headers();
+  const request = buildGoogleOAuthRequest(
+    requestHeaders.get("origin"),
+    typeof formData.get("next") === "string"
+      ? String(formData.get("next"))
+      : "/app",
+    environment.server.APP_ORIGIN,
+    environment.nodeEnv,
+  );
+  const supabase = await createServerSupabaseClient();
+
+  if (!request || !supabase) {
+    redirect("/sign-in?error=provider");
+  }
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: request.redirectTo,
+      skipBrowserRedirect: true,
+    },
+  });
+
+  if (error || !data.url) {
+    redirect("/sign-in?error=provider");
+  }
+
+  redirect(data.url);
+}
 
 export async function requestMagicLinkForMode(
   mode: DataMode,
