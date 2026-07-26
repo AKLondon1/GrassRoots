@@ -4,7 +4,7 @@
 create table public.beta_auth_allowlist (
   email text primary key check (
     email = lower(btrim(email))
-    and email ~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'
+    and email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
   ),
   expires_at timestamptz not null,
   operator_note text,
@@ -38,7 +38,7 @@ declare
 begin
   if coalesce(provider, '') <> 'google'
     or candidate_email = ''
-    or candidate_email !~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$' then
+    or candidate_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
     return jsonb_build_object(
       'error',
       jsonb_build_object('http_code', 403, 'message', 'Beta access is by invitation only.')

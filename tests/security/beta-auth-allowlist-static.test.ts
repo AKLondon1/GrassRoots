@@ -12,6 +12,11 @@ describe("beta account-creation allowlist", () => {
     expect(migration).toMatch(/create table public\.beta_auth_allowlist/i);
     expect(migration).toMatch(/email = lower\(btrim\(email\)\)/i);
     expect(migration).toMatch(/expires_at > created_at/i);
+    const standardEmailPattern = String.raw`^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$`;
+
+    expect(migration).toContain(`email ~ '${standardEmailPattern}'`);
+    expect(migration).toContain(`candidate_email !~ '${standardEmailPattern}'`);
+    expect(migration).not.toContain(String.raw`\\.`);
     expect(migration).toMatch(
       /create function public\.hook_restrict_beta_signup\(event jsonb\)/i,
     );
