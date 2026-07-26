@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { DeniedState } from "@/components/ui/denied-state";
+import { SignOutForm } from "@/components/auth/sign-out-form";
 import {
   createSupabaseAuthenticatedHomeReader,
   resolveAuthenticatedHome,
@@ -23,6 +24,7 @@ export default async function AuthenticatedHomePage() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-surface p-4">
       <DeniedState
+        action={<SignOutForm />}
         className="bg-background"
         title="A club invitation is required"
         description="You are signed in securely, but this account does not have an active GrassRoots organisation membership. Ask your club administrator for an invitation link."

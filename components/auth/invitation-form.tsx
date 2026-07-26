@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import Link from "next/link";
 
 import { acceptInvitationAction } from "@/app/(auth)/invite/[token]/actions";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,11 @@ export function InvitationForm({ token }: { token: string }) {
         </p>
       ) : null}
       {state.status !== "accepted" ? <AcceptButton /> : null}
+      {state.status === "accepted" ? (
+        <Button asChild className="w-full" type="button">
+          <Link href="/app">Continue to club</Link>
+        </Button>
+      ) : null}
     </form>
   );
 }
