@@ -19,7 +19,7 @@ function configureClient({
   user = null,
   writeSessionCookie = false,
 }: {
-  exchangeError?: { message: string } | null;
+  exchangeError?: { message: string; code?: string } | null;
   user?: { id: string } | null;
   writeSessionCookie?: boolean;
 }) {
@@ -97,6 +97,28 @@ describe("OAuth callback Route Handler", () => {
 
     expect(auth.exchangeCodeForSession).toHaveBeenCalledOnce();
     expect(auth.getUser).toHaveBeenCalledOnce();
+    expect(response.headers.get("location")).toBe(
+      "https://grassroots.example/app",
+    );
+  });
+
+  it("redirects a concurrent flow-state duplicate to the destination before the session cookie is visible", async () => {
+    configureClient({
+      exchangeError: {
+        code: "flow_state_not_found",
+        message: "invalid flow state, no valid flow state found",
+      },
+      user: null,
+    });
+
+    const response = await GET(
+      new NextRequest(
+        "https://grassroots.example/auth/callback?code=raced-code&next=%2Fapp",
+      ),
+    );
+
+    expect(auth.exchangeCodeForSession).toHaveBeenCalledOnce();
+    expect(auth.getUser).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe(
       "https://grassroots.example/app",
     );
