@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   completeAuthCallback,
   createAuthResponseHeaders,
+  isConsumedFlowStateError,
 } from "@/lib/supabase/auth-callback";
 
 describe("Supabase auth callback", () => {
@@ -64,6 +65,39 @@ describe("Supabase auth callback", () => {
     expect(hasValidSession).toHaveBeenCalledOnce();
   });
 
+  it("redirects a concurrent flow-state duplicate to the destination without a session", async () => {
+    const exchangeCode = vi.fn().mockResolvedValue({
+      error: {
+        code: "flow_state_not_found",
+        message: "invalid flow state, no valid flow state found",
+      },
+    });
+    const hasValidSession = vi.fn().mockResolvedValue(false);
+
+    await expect(
+      completeAuthCallback(
+        "https://grassroots.example/auth/callback?code=raced&next=%2Fapp",
+        exchangeCode,
+        hasValidSession,
+      ),
+    ).resolves.toEqual({ destination: "/app", status: "success" });
+    expect(hasValidSession).not.toHaveBeenCalled();
+  });
+
+  it("recognises flow-state duplicates by message when no error code is present", async () => {
+    const exchangeCode = vi.fn().mockResolvedValue({
+      error: { message: "No valid flow state found" },
+    });
+
+    await expect(
+      completeAuthCallback(
+        "https://grassroots.example/auth/callback?code=raced&next=%2Fapp",
+        exchangeCode,
+        vi.fn().mockResolvedValue(false),
+      ),
+    ).resolves.toEqual({ destination: "/app", status: "success" });
+  });
+
   it("reports an error when the exchange fails and no session exists", async () => {
     const exchangeCode = vi.fn().mockResolvedValue({
       error: { message: "invalid code" },
@@ -102,5 +136,33 @@ describe("Supabase auth callback", () => {
         exchangeCode,
       ),
     ).resolves.toEqual({ destination: "/app", status: "success" });
+  });
+});
+
+describe("isConsumedFlowStateError", () => {
+  it("matches Supabase flow-state codes and messages only", () => {
+    expect(
+      isConsumedFlowStateError({ code: "flow_state_not_found", message: "404" }),
+    ).toBe(true);
+    expect(
+      isConsumedFlowStateError({ code: "flow_state_expired", message: "404" }),
+    ).toBe(true);
+    expect(
+      isConsumedFlowStateError({
+        message: "invalid flow state, no valid flow state found",
+      }),
+    ).toBe(true);
+
+    expect(isConsumedFlowStateError(null)).toBe(false);
+    expect(isConsumedFlowStateError({ message: "Invalid PKCE code" })).toBe(false);
+    expect(
+      isConsumedFlowStateError({
+        code: "bad_oauth_state",
+        message: "OAuth state parameter missing",
+      }),
+    ).toBe(false);
+    expect(
+      isConsumedFlowStateError({ message: "access_denied by the provider" }),
+    ).toBe(false);
   });
 });
