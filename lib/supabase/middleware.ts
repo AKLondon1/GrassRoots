@@ -24,14 +24,11 @@ export async function refreshSupabaseSession(
   const supabase = createServerClient(config.url, config.anonKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
-      setAll(cookiesToSet, headers) {
+      setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request: { headers: requestHeaders ?? request.headers } });
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options),
-        );
-        Object.entries(headers).forEach(([name, value]) =>
-          response.headers.set(name, value),
         );
       },
     },

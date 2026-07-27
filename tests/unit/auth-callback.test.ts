@@ -48,6 +48,51 @@ describe("Supabase auth callback", () => {
     ).resolves.toEqual({ destination: "/sign-in?error=callback", status: "error" });
   });
 
+  it("completes sign-in when a consumed code is retried with a valid session", async () => {
+    const exchangeCode = vi.fn().mockResolvedValue({
+      error: { message: "PKCE code has already been consumed" },
+    });
+    const hasValidSession = vi.fn().mockResolvedValue(true);
+
+    await expect(
+      completeAuthCallback(
+        "https://grassroots.example/auth/callback?code=consumed&next=%2Fapp",
+        exchangeCode,
+        hasValidSession,
+      ),
+    ).resolves.toEqual({ destination: "/app", status: "success" });
+    expect(hasValidSession).toHaveBeenCalledOnce();
+  });
+
+  it("reports an error when the exchange fails and no session exists", async () => {
+    const exchangeCode = vi.fn().mockResolvedValue({
+      error: { message: "invalid code" },
+    });
+    const hasValidSession = vi.fn().mockResolvedValue(false);
+
+    await expect(
+      completeAuthCallback(
+        "https://grassroots.example/auth/callback?code=bad&next=%2Fapp",
+        exchangeCode,
+        hasValidSession,
+      ),
+    ).resolves.toEqual({ destination: "/sign-in?error=callback", status: "error" });
+  });
+
+  it("does not consult the session check when the exchange succeeds", async () => {
+    const exchangeCode = vi.fn().mockResolvedValue({ error: null });
+    const hasValidSession = vi.fn().mockResolvedValue(false);
+
+    await expect(
+      completeAuthCallback(
+        "https://grassroots.example/auth/callback?code=fresh&next=%2Fapp",
+        exchangeCode,
+        hasValidSession,
+      ),
+    ).resolves.toEqual({ destination: "/app", status: "success" });
+    expect(hasValidSession).not.toHaveBeenCalled();
+  });
+
   it("rejects backslash network-path redirects", async () => {
     const exchangeCode = vi.fn().mockResolvedValue({ error: null });
 
