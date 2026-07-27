@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 
 import { environment } from "@/lib/env";
 import {
@@ -9,7 +10,7 @@ import {
 } from "@/lib/supabase/types";
 
 export async function createServerSupabaseClient(
-  responseHeaders?: Headers,
+  response?: NextResponse,
 ): Promise<SupabaseClient<Database> | null> {
   const config = resolveSupabasePublicConfig({
     mode: environment.dataMode,
@@ -23,13 +24,19 @@ export async function createServerSupabaseClient(
   return createServerClient<Database>(config.url, config.anonKey, {
     cookies: {
       getAll: () => cookieStore.getAll(),
-      setAll(cookiesToSet, headers) {
+      setAll(cookiesToSet) {
+        if (response) {
+          // Route Handlers must attach session cookies to the response they
+          // return; mutations via cookies() are not guaranteed to survive a
+          // manually constructed redirect.
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          );
+          return;
+        }
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options),
-          );
-          Object.entries(headers).forEach(([name, value]) =>
-            responseHeaders?.set(name, value),
           );
         } catch {
           // Server Components cannot write cookies. proxy.ts performs refreshes.
