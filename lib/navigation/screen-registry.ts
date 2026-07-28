@@ -238,6 +238,28 @@ export function getScreenHref(
   return `${path}?role=${role}`;
 }
 
+/**
+ * The landing screen for a member holding `roles`, which arrive already ordered
+ * by priority from `resolveProductionWorkspaceAccess`. Falls back to the parent
+ * default so a member with no resolved role still lands somewhere renderable.
+ */
+export function getDefaultScreenForRoles(
+  roles: readonly AppRole[],
+): ScreenDefinition {
+  return getDefaultScreen(roles[0] ?? "parent");
+}
+
 export function parseAppRole(value: string | undefined): AppRole {
   return appRoles.find((role) => role === value) ?? "parent";
+}
+
+/**
+ * Like `parseAppRole` but without its `"parent"` default. Production routing must
+ * be able to tell "no role was requested" from "parent was requested", because the
+ * caller falls back to the member's highest-priority held role, not to parent.
+ */
+export function parseRequestedRole(
+  value: string | undefined,
+): AppRole | undefined {
+  return appRoles.find((role) => role === value);
 }

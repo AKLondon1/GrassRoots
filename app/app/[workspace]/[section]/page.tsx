@@ -16,6 +16,7 @@ import { getDemoSession } from "@/lib/demo/session";
 import { environment } from "@/lib/env";
 import {
   parseAppRole,
+  parseRequestedRole,
   resolveScreenSection,
   type AppRole,
 } from "@/lib/navigation/screen-registry";
@@ -75,10 +76,18 @@ export default async function WorkspaceSectionPage({
       );
     }
 
+    // An unrecognised ?role= resolves to undefined rather than "parent", so the
+    // member falls back to their highest-priority held role. A role they do not
+    // hold is ignored by resolveProductionWorkspaceAccess, so this cannot widen
+    // access.
+    const requestedRole = parseRequestedRole(
+      Array.isArray(query.role) ? query.role[0] : query.role,
+    );
     const access = await resolveProductionWorkspaceAccess(
       createSupabaseTenancyAccessReader(supabase),
       workspace,
       data.user.id,
+      requestedRole,
     );
     if (access.status === "denied") {
       return (
