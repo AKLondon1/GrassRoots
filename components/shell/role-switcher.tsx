@@ -22,7 +22,14 @@ function RoleSwitcher({ value, workspace, roles }: RoleSwitcherProps) {
 
   const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextRole = event.target.value as AppRole;
-    router.push(getScreenHref(workspace, getDefaultScreen(nextRole), nextRole));
+    // Send the member to the workspace root rather than guessing a screen. Only the
+    // server knows the target role's capabilities, and the registered default for a
+    // role is often one the member cannot open: parent "home" needs family:view,
+    // which the guardian role does not grant. The landing page resolves the role and
+    // redirects to the first screen they can actually open.
+    router.push(
+      `/app/${encodeURIComponent(workspace)}?role=${encodeURIComponent(nextRole)}`,
+    );
   };
 
   return (

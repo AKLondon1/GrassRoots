@@ -240,13 +240,24 @@ export function getScreenHref(
 
 /**
  * The landing screen for a member holding `roles`, which arrive already ordered
- * by priority from `resolveProductionWorkspaceAccess`. Falls back to the parent
- * default so a member with no resolved role still lands somewhere renderable.
+ * by priority from `resolveProductionWorkspaceAccess`.
+ *
+ * It must respect `capabilities`, not just the role. `getDefaultScreen` returns the
+ * first *registered* screen for a role, which the member may have no permission to
+ * open: the club default is `overview`, gated on `club:view`, and a club admin whose
+ * roles grant `club:manage` but not `club:view` would be redirected straight into
+ * "Overview is not available for this role". Land them on the first screen they can
+ * actually open instead.
+ *
+ * Falls back to the role's registered default when nothing is permitted, which the
+ * shell then renders as `NoScreensState` rather than a denial wall.
  */
 export function getDefaultScreenForRoles(
   roles: readonly AppRole[],
+  capabilities: readonly string[],
 ): ScreenDefinition {
-  return getDefaultScreen(roles[0] ?? "parent");
+  const role = roles[0] ?? "parent";
+  return getAllowedScreensForRole(role, capabilities)[0] ?? getDefaultScreen(role);
 }
 
 export function parseAppRole(value: string | undefined): AppRole {

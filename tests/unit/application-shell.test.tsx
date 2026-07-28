@@ -90,7 +90,7 @@ describe("illustrative application shell", () => {
     expect(screen.getByText("Organisation access")).toBeInTheDocument();
   });
 
-  it("switches roles by navigating to that role's valid default screen", async () => {
+  it("switches roles by letting the server choose a screen that role can open", async () => {
     const user = userEvent.setup();
     render(
       <ApplicationShell
@@ -107,8 +107,12 @@ describe("illustrative application shell", () => {
       "coach",
     );
 
+    // The switcher deliberately does not pick a screen. A role's registered default
+    // is often one the member cannot open (parent "home" needs family:view, which
+    // the guardian role does not grant), and only the server knows the target role's
+    // capabilities. The landing route resolves it and redirects.
     expect(router.push).toHaveBeenCalledWith(
-      "/app/riverside-juniors/today?role=coach",
+      "/app/riverside-juniors?role=coach",
     );
   });
 

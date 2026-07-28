@@ -11,6 +11,8 @@ import {
   getDefaultScreen,
   getDefaultScreenForRoles,
   getScreenHref,
+  parseAppRole,
+  parseRequestedRole,
 } from "@/lib/navigation/screen-registry";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -21,13 +23,20 @@ export const metadata: Metadata = {
 
 interface WorkspacePageProps {
   params: Promise<{ workspace: string }>;
+  searchParams: Promise<{ role?: string | string[] }>;
 }
 
-export default async function WorkspacePage({ params }: WorkspacePageProps) {
+export default async function WorkspacePage({
+  params,
+  searchParams,
+}: WorkspacePageProps) {
   const { workspace } = await params;
+  const query = await searchParams;
+  const requested = Array.isArray(query.role) ? query.role[0] : query.role;
 
   if (environment.dataMode === "demo") {
-    redirect(getScreenHref(workspace, getDefaultScreen("parent"), "parent"));
+    const demoRole = parseAppRole(requested);
+    redirect(getScreenHref(workspace, getDefaultScreen(demoRole), demoRole));
   }
 
   // Production members are not all parents. Landing everyone on the parent default
@@ -41,17 +50,22 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     redirect(`/sign-in?next=${encodeURIComponent(`/app/${workspace}`)}`);
   }
 
+  // The role switcher sends members here rather than guessing a destination, so a
+  // requested role must be honoured. resolveProductionWorkspaceAccess ignores any
+  // role the member does not hold, and scopes `capabilities` to whichever role ends
+  // up active, which is exactly what choosing a landable screen needs.
   const access = await resolveProductionWorkspaceAccess(
     createSupabaseTenancyAccessReader(supabase),
     workspace,
     data.user.id,
+    parseRequestedRole(requested),
   );
   if (access.status === "denied") redirect("/sign-in?error=workspace");
 
   redirect(
     getScreenHref(
       workspace,
-      getDefaultScreenForRoles(access.roles),
+      getDefaultScreenForRoles(access.roles, access.capabilities),
       access.role,
     ),
   );
