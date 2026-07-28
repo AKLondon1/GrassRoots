@@ -70,7 +70,10 @@ export type ProductionWorkspaceAccess =
       status: "allowed";
       organisationId: string;
       membershipId: string;
+      /** The role currently in effect. Drives `capabilities` and the landing screen. */
       role: AppRole;
+      /** Every distinct role the member holds, ordered platform, club, coach, parent. */
+      roles: readonly AppRole[];
       /** Navigation hints only; never authorise a record mutation from this union. */
       capabilities: readonly Capability[];
       /** Downstream mutations must match their exact target against these grants. */
@@ -87,18 +90,19 @@ function appRoleForAssignedKey(key: string): AppRole {
   return "club";
 }
 
-function appRoleForAssignedKeys(keys: readonly string[]): AppRole | undefined {
+const ROLE_PRIORITY = ["platform", "club", "coach", "parent"] as const;
+
+function appRolesForAssignedKeys(keys: readonly string[]): readonly AppRole[] {
   const mapped = new Set(keys.map(appRoleForAssignedKey));
 
-  return (["platform", "club", "coach", "parent"] as const).find((role) =>
-    mapped.has(role),
-  );
+  return Object.freeze(ROLE_PRIORITY.filter((role) => mapped.has(role)));
 }
 
 export async function resolveProductionWorkspaceAccess(
   reader: TenancyAccessReader,
   workspace: string,
   userId: string,
+  requestedRole?: AppRole,
 ): Promise<ProductionWorkspaceAccess> {
   const organisation = await reader.findOrganisation(workspace);
   if (!organisation) return { status: "denied", reason: "membership" };
@@ -121,7 +125,15 @@ export async function resolveProductionWorkspaceAccess(
     reader.listRolePermissions(organisation.id, roleIds),
   ]);
   const assignedRoles = roles.filter(({ id }) => roleIds.includes(id));
-  const role = appRoleForAssignedKeys(assignedRoles.map(({ key }) => key));
+  const heldRoles = appRolesForAssignedKeys(
+    assignedRoles.map(({ key }) => key),
+  );
+  // A requested role only takes effect if the member actually holds it, so a
+  // hand-edited ?role= cannot widen access. Otherwise the highest-priority role wins.
+  const role =
+    requestedRole && heldRoles.includes(requestedRole)
+      ? requestedRole
+      : heldRoles[0];
   const roleById = new Map(
     assignedRoles.map((assignedRole) => [assignedRole.id, assignedRole]),
   );
@@ -180,6 +192,7 @@ export async function resolveProductionWorkspaceAccess(
     organisationId: organisation.id,
     membershipId: membership.id,
     role,
+    roles: heldRoles,
     capabilities,
     scopedGrants,
   };
