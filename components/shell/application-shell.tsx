@@ -34,6 +34,11 @@ interface ApplicationShellProps {
   children?: ReactNode;
   isDemo?: boolean;
   role: AppRole;
+  /**
+   * Every role the member holds. Defaults to just the active role, so a
+   * single-role member never sees a switcher offering them nothing.
+   */
+  roles?: readonly AppRole[];
   workspace: string;
 }
 
@@ -86,6 +91,7 @@ function ApplicationShell({
   children,
   isDemo = true,
   role,
+  roles = [role],
   workspace,
 }: ApplicationShellProps) {
   const screens = getAllowedScreensForRole(role, capabilities);
@@ -115,7 +121,9 @@ function ApplicationShell({
           <div className="flex items-center gap-2">
             <CommandMenu isDemo={isDemo} role={role} screens={screens} workspace={workspace} />
             {!isDemo ? <PushRegistration workspace={workspace} /> : null}
-            {isDemo ? <RoleSwitcher value={role} workspace={workspace} /> : null}
+            {roles.length > 1 ? (
+          <RoleSwitcher value={role} workspace={workspace} roles={roles} />
+        ) : null}
             {isDemo ? (
               <Button asChild size="small" variant="quiet"><Link href="/sign-in"><LogOut className="size-4" aria-hidden="true"/><span className="hidden sm:inline">Leave demo</span><span className="sr-only sm:hidden">Leave demo</span></Link></Button>
             ) : (

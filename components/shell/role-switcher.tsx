@@ -4,7 +4,6 @@ import type { ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-  appRoles,
   getDefaultScreen,
   getScreenHref,
   roleLabels,
@@ -14,9 +13,11 @@ import {
 interface RoleSwitcherProps {
   value: AppRole;
   workspace: string;
+  /** Only the roles this member holds. In demo mode the caller passes `appRoles`. */
+  roles: readonly AppRole[];
 }
 
-function RoleSwitcher({ value, workspace }: RoleSwitcherProps) {
+function RoleSwitcher({ value, workspace, roles }: RoleSwitcherProps) {
   const router = useRouter();
 
   const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -26,14 +27,14 @@ function RoleSwitcher({ value, workspace }: RoleSwitcherProps) {
 
   return (
     <label className="flex min-h-11 items-center gap-2 rounded-[10px] border border-border bg-background px-3 text-sm font-medium text-ink focus-within:ring-3 focus-within:ring-ring/35">
-      <span className="hidden text-muted sm:inline">View as</span>
+      <span className="hidden text-muted sm:inline">Acting as</span>
       <select
-        aria-label="Preview role"
+        aria-label="Acting as"
         className="min-h-9 cursor-pointer bg-transparent font-semibold outline-none"
         value={value}
         onChange={handleChange}
       >
-        {appRoles.map((role) => (
+        {roles.map((role) => (
           <option key={role} value={role}>
             {roleLabels[role]}
           </option>

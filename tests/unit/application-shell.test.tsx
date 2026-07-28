@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationShell } from "@/components/shell/application-shell";
+import { appRoles } from "@/lib/navigation/screen-registry";
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -96,12 +97,13 @@ describe("illustrative application shell", () => {
         activeSection="home"
         capabilities={parentCapabilities}
         role="parent"
+        roles={appRoles}
         workspace="riverside-juniors"
       />,
     );
 
     await user.selectOptions(
-      screen.getByRole("combobox", { name: "Preview role" }),
+      screen.getByRole("combobox", { name: "Acting as" }),
       "coach",
     );
 

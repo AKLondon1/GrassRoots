@@ -15,6 +15,7 @@ import { brand } from "@/lib/brand";
 import { getDemoSession } from "@/lib/demo/session";
 import { environment } from "@/lib/env";
 import {
+  appRoles,
   parseAppRole,
   parseRequestedRole,
   resolveScreenSection,
@@ -52,12 +53,15 @@ export default async function WorkspaceSectionPage({
   const query = await searchParams;
   const cursor = parseUuidCursor(query.cursor);
   let role: AppRole;
+  let roles: readonly AppRole[];
   let capabilities: readonly string[];
   let organisationId: string | null = null;
 
   if (environment.dataMode === "demo") {
     const requestedRole = Array.isArray(query.role) ? query.role[0] : query.role;
     role = parseAppRole(requestedRole);
+    // The demo deliberately offers every role, since browsing them is the point.
+    roles = appRoles;
     const session = getDemoSession(role);
     if (workspace !== session.organisation.slug) notFound();
     capabilities = [
@@ -101,6 +105,7 @@ export default async function WorkspaceSectionPage({
       );
     }
     role = access.role;
+    roles = access.roles;
     capabilities = access.capabilities;
     organisationId = access.organisationId;
   }
@@ -189,6 +194,7 @@ export default async function WorkspaceSectionPage({
       capabilities={capabilities}
       isDemo={environment.dataMode === "demo"}
       role={role}
+      roles={roles}
       workspace={workspace}
     >
       {screenContent}
