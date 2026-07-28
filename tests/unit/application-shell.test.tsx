@@ -221,4 +221,56 @@ describe("illustrative application shell", () => {
       within(dialog).getByText("No screen matches that search."),
     ).toBeInTheDocument();
   });
+
+  it("never renders demo copy when not in demo mode", () => {
+    render(
+      <ApplicationShell
+        activeSection="overview"
+        capabilities={["club:view"]}
+        isDemo={false}
+        role="club"
+        roles={["club"]}
+        workspace="riverside-juniors"
+      />,
+    );
+
+    expect(screen.queryByText(/Jamie/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Jayden/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Northfield Juniors/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Riverside, Pitch 2/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confirm Saturday pitch allocation/)).not.toBeInTheDocument();
+  });
+
+  it("still renders the demo focus panels in demo mode", () => {
+    render(
+      <ApplicationShell
+        activeSection="overview"
+        capabilities={["club:view"]}
+        role="club"
+        roles={appRoles}
+        workspace="riverside-juniors"
+      />,
+    );
+
+    expect(
+      screen.getByText("Confirm Saturday pitch allocation"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders a recoverable state when the role has no permitted screens", () => {
+    render(
+      <ApplicationShell
+        activeSection="overview"
+        capabilities={[]}
+        isDemo={false}
+        role="club"
+        roles={["club"]}
+        workspace="riverside-juniors"
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /No screens are available/i }),
+    ).toBeInTheDocument();
+  });
 });
