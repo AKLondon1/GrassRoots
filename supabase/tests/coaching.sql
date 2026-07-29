@@ -60,6 +60,12 @@ select is((select count(*) from public.matches where id = '00000000-0000-4000-80
 select is((select side_size from public.matches where id = '00000000-0000-4000-8000-000000003101'), 7::smallint, 'fictional match is configured as seven-a-side');
 select is((select count(*) from public.parent_development_summaries where id = '00000000-0000-4000-8000-000000003072'), 1::bigint, 'approved positive summary seed exists');
 
+-- is_match_participant is an internal helper: 0005_coaching.sql revokes execute on
+-- it from public, so it must not be called while impersonating `authenticated`.
+-- The assertion is about squad data, not about who is asking, so it runs here
+-- rather than inside the coach block below.
+select is(public.is_match_participant('00000000-0000-4000-8000-000000003101','00000000-0000-4000-8000-000000000601'),true,'published selected squad member is a match participant');
+
 insert into public.events (id,organisation_id,team_id,kind,title,created_by_membership_id) values ('00000000-0000-4000-8000-000000003900','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000802','training','pgTAP metadata session','00000000-0000-4000-8000-000000000302');
 insert into public.event_instances (id,organisation_id,event_id,team_id,starts_at,ends_at) values ('00000000-0000-4000-8000-000000003901','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000003900','00000000-0000-4000-8000-000000000802',clock_timestamp()+interval '1 day',clock_timestamp()+interval '1 day 1 hour');
 insert into public.events (id,organisation_id,team_id,kind,title,created_by_membership_id) values ('00000000-0000-4000-8000-000000003902','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000802','match','pgTAP five-a-side match','00000000-0000-4000-8000-000000000302');
@@ -74,7 +80,6 @@ select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202
 select lives_ok($$select public.create_match_day('00000000-0000-4000-8000-000000003903',5::smallint)$$,'coach can create match day from a canonical event with an explicit format');
 select is((select side_size from public.matches where event_instance_id='00000000-0000-4000-8000-000000003903'),5::smallint,'match creation preserves the selected five-a-side format');
 select throws_ok($$select public.create_match_day('00000000-0000-4000-8000-000000003904',5::smallint)$$,'P0001',null,'completed events cannot create a new match day');
-select is(public.is_match_participant('00000000-0000-4000-8000-000000003101','00000000-0000-4000-8000-000000000601'),true,'published selected squad member is a match participant');
 
 select lives_ok(
   $$select public.record_training_attendance('00000000-0000-4000-8000-000000003001', '00000000-0000-4000-8000-000000000603', 'late', clock_timestamp(), 'coaching-pgtap-attendance-rowan')$$,

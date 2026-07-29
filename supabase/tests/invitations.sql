@@ -33,14 +33,22 @@ values
   (
     '00000000-0000-4000-8000-000000013002',
     '00000000-0000-4000-8000-000000011001',
-    'coach',
-    'Coach'
+    -- Deliberately not keyed 'coach'. This file tests invitation mechanics with an
+    -- organisation-scoped invite, and 0020_role_model.sql requires manager and coach
+    -- to be scoped to a team, since org-wide they would hold people:manage over
+    -- every family. role_model.sql covers that rule.
+    'invited-role',
+    'Invited role'
   ),
   (
     '00000000-0000-4000-8000-000000013003',
     '00000000-0000-4000-8000-000000011002',
-    'coach',
-    'Coach'
+    -- Deliberately not keyed 'coach'. This file tests invitation mechanics with an
+    -- organisation-scoped invite, and 0020_role_model.sql requires manager and coach
+    -- to be scoped to a team, since org-wide they would hold people:manage over
+    -- every family. role_model.sql covers that rule.
+    'invited-role',
+    'Invited role'
   );
 
 insert into public.role_permissions (organisation_id, role_id, permission_id)

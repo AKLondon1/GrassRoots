@@ -47,8 +47,13 @@ insert into public.roles (id, organisation_id, key, name)
 values (
   '00000000-0000-4000-8000-000000003001',
   '00000000-0000-4000-8000-000000001001',
-  'coach',
-  'Coach'
+  -- Deliberately not keyed 'coach'. This file asserts that RLS refuses a member
+  -- escalating their own organisation-scoped assignment, and 0020_role_model.sql
+  -- adds a BEFORE trigger refusing club-wide manager and coach grants outright.
+  -- Postgres runs BEFORE triggers ahead of RLS, so a 'coach' fixture here would be
+  -- refused by the trigger and the RLS check would never be exercised.
+  'scoped-role',
+  'Scoped role'
 );
 
 insert into public.role_permissions (
