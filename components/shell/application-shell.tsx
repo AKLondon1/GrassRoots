@@ -2,13 +2,9 @@
 
 import {
   CalendarDays,
-  CheckCircle2,
-  CircleAlert,
   Clock3,
-  MapPin,
   LogOut,
   ShieldCheck,
-  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -22,10 +18,13 @@ import { Status } from "@/components/ui/status";
 import { Button } from "@/components/ui/button";
 import { PushRegistration } from "@/components/pwa/push-registration";
 import { brand } from "@/lib/brand";
+import { EmptyState } from "@/components/ui/empty-state";
+import { getScreenCopy } from "@/lib/navigation/screen-copy";
 import {
   getAllowedScreensForRole,
   roleLabels,
   type AppRole,
+  type ScreenDefinition,
 } from "@/lib/navigation/screen-registry";
 
 interface ApplicationShellProps {
@@ -34,6 +33,11 @@ interface ApplicationShellProps {
   children?: ReactNode;
   isDemo?: boolean;
   role: AppRole;
+  /**
+   * Every role the member holds. Defaults to just the active role, so a
+   * single-role member never sees a switcher offering them nothing.
+   */
+  roles?: readonly AppRole[];
   workspace: string;
 }
 
@@ -86,13 +90,21 @@ function ApplicationShell({
   children,
   isDemo = true,
   role,
+  roles = [role],
   workspace,
 }: ApplicationShellProps) {
   const screens = getAllowedScreensForRole(role, capabilities);
+  // A member can hold a role whose screens all require capabilities they lack.
+  // Dereferencing screens[0] below would throw, so recover before that happens.
+  if (screens.length === 0) {
+    return <NoScreensState role={role} workspace={workspace} />;
+  }
   const currentScreen =
     screens.find((screen) => screen.section === activeSection) ?? screens[0];
   const demo = roleDemo[role];
   const isDefaultScreen = currentScreen.id === screens[0].id;
+  const screenCopy = getScreenCopy(currentScreen);
+  const showDemoCopy = isDemo && isDefaultScreen;
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-surface text-ink">
@@ -115,7 +127,9 @@ function ApplicationShell({
           <div className="flex items-center gap-2">
             <CommandMenu isDemo={isDemo} role={role} screens={screens} workspace={workspace} />
             {!isDemo ? <PushRegistration workspace={workspace} /> : null}
-            {isDemo ? <RoleSwitcher value={role} workspace={workspace} /> : null}
+            {roles.length > 1 ? (
+          <RoleSwitcher value={role} workspace={workspace} roles={roles} />
+        ) : null}
             {isDemo ? (
               <Button asChild size="small" variant="quiet"><Link href="/sign-in"><LogOut className="size-4" aria-hidden="true"/><span className="hidden sm:inline">Leave demo</span><span className="sr-only sm:hidden">Leave demo</span></Link></Button>
             ) : (
@@ -159,10 +173,10 @@ function ApplicationShell({
                   className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-ink sm:text-4xl"
                   id="application-page-title"
                 >
-                  {isDefaultScreen ? demo.title : currentScreen.label}
+                  {showDemoCopy ? demo.title : screenCopy.title}
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-                  {isDefaultScreen ? demo.summary : currentScreen.states.empty.description}
+                  {showDemoCopy ? demo.summary : screenCopy.description}
                 </p>
               </div>
               <Status tone="info">
@@ -176,7 +190,44 @@ function ApplicationShell({
               </p>
             ) : null}
 
-            {children ? <div className="mt-8">{children}</div> : <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.55fr)]">
+            {children ? (
+              <div className="mt-8">{children}</div>
+            ) : isDemo ? (
+              <DemoFocusPanels currentScreen={currentScreen} demo={demo} />
+            ) : (
+              <div className="mt-8">
+                <EmptyState
+                  title={`${currentScreen.label} is not built yet`}
+                  description="This screen is planned but not part of the current release. Nothing here is real data."
+                />
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      <BottomNavigation
+        currentScreenId={currentScreen.id}
+        role={role}
+        screens={screens}
+        workspace={workspace}
+      />
+    </div>
+  );
+}
+
+interface DemoFocusPanelsProps {
+  currentScreen: ScreenDefinition;
+  demo: (typeof roleDemo)[AppRole];
+}
+
+/**
+ * The original two-panel focus block, extracted verbatim so the demo keeps
+ * exactly the look it had. It is fictional, so it renders only in demo mode.
+ */
+function DemoFocusPanels({ currentScreen, demo }: DemoFocusPanelsProps) {
+  return (
+    <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.55fr)]">
               <section
                 className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"
                 aria-labelledby="shell-focus-title"
@@ -222,33 +273,30 @@ function ApplicationShell({
                   {demo.secondaryTitle}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted">{demo.secondaryDetail}</p>
-                {!isDemo ? <div className="mt-6 flex items-start gap-3 border-t border-border-strong pt-5">
-                  {role === "parent" ? (
-                    <MapPin className="mt-0.5 size-4 shrink-0 text-primary-strong" aria-hidden="true" />
-                  ) : role === "coach" ? (
-                    <UsersRound className="mt-0.5 size-4 shrink-0 text-primary-strong" aria-hidden="true" />
-                  ) : role === "club" ? (
-                    <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning-strong" aria-hidden="true" />
-                  ) : (
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-info-strong" aria-hidden="true" />
-                  )}
-                  <p className="text-xs leading-5 text-muted">
-                    Access is limited by your active organisation membership and assigned capabilities.
-                  </p>
-                </div> : null}
               </aside>
-            </div>}
-          </div>
-        </main>
-      </div>
-
-      <BottomNavigation
-        currentScreenId={currentScreen.id}
-        role={role}
-        screens={screens}
-        workspace={workspace}
-      />
     </div>
+  );
+}
+
+interface NoScreensStateProps {
+  role: AppRole;
+  workspace: string;
+}
+
+/**
+ * A member can hold a role whose screens all require capabilities they have not
+ * been granted. That is a configuration gap, not a crash, so say so plainly and
+ * name who can fix it.
+ */
+function NoScreensState({ role, workspace }: NoScreensStateProps) {
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-surface p-4 sm:p-8">
+      <EmptyState
+        className="bg-background"
+        title="No screens are available for this role"
+        description={`Your ${roleLabels[role].toLowerCase()} role in ${formatWorkspace(workspace)} has no capabilities assigned yet. A club administrator needs to grant one before this area can open.`}
+      />
+    </main>
   );
 }
 

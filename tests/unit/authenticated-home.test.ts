@@ -15,6 +15,7 @@ function allowed(
     organisationId: "organisation-riverside",
     membershipId: "membership-adult",
     role,
+    roles: [role],
     capabilities,
     scopedGrants: [],
   };

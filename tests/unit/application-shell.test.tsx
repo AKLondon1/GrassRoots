@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationShell } from "@/components/shell/application-shell";
+import { appRoles } from "@/lib/navigation/screen-registry";
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -89,24 +90,29 @@ describe("illustrative application shell", () => {
     expect(screen.getByText("Organisation access")).toBeInTheDocument();
   });
 
-  it("switches roles by navigating to that role's valid default screen", async () => {
+  it("switches roles by letting the server choose a screen that role can open", async () => {
     const user = userEvent.setup();
     render(
       <ApplicationShell
         activeSection="home"
         capabilities={parentCapabilities}
         role="parent"
+        roles={appRoles}
         workspace="riverside-juniors"
       />,
     );
 
     await user.selectOptions(
-      screen.getByRole("combobox", { name: "Preview role" }),
+      screen.getByRole("combobox", { name: "Acting as" }),
       "coach",
     );
 
+    // The switcher deliberately does not pick a screen. A role's registered default
+    // is often one the member cannot open (parent "home" needs family:view, which
+    // the guardian role does not grant), and only the server knows the target role's
+    // capabilities. The landing route resolves it and redirects.
     expect(router.push).toHaveBeenCalledWith(
-      "/app/riverside-juniors/today?role=coach",
+      "/app/riverside-juniors?role=coach",
     );
   });
 
@@ -217,6 +223,58 @@ describe("illustrative application shell", () => {
     ).not.toBeInTheDocument();
     expect(
       within(dialog).getByText("No screen matches that search."),
+    ).toBeInTheDocument();
+  });
+
+  it("never renders demo copy when not in demo mode", () => {
+    render(
+      <ApplicationShell
+        activeSection="overview"
+        capabilities={["club:view"]}
+        isDemo={false}
+        role="club"
+        roles={["club"]}
+        workspace="riverside-juniors"
+      />,
+    );
+
+    expect(screen.queryByText(/Jamie/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Jayden/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Northfield Juniors/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Riverside, Pitch 2/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confirm Saturday pitch allocation/)).not.toBeInTheDocument();
+  });
+
+  it("still renders the demo focus panels in demo mode", () => {
+    render(
+      <ApplicationShell
+        activeSection="overview"
+        capabilities={["club:view"]}
+        role="club"
+        roles={appRoles}
+        workspace="riverside-juniors"
+      />,
+    );
+
+    expect(
+      screen.getByText("Confirm Saturday pitch allocation"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders a recoverable state when the role has no permitted screens", () => {
+    render(
+      <ApplicationShell
+        activeSection="overview"
+        capabilities={[]}
+        isDemo={false}
+        role="club"
+        roles={["club"]}
+        workspace="riverside-juniors"
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /No screens are available/i }),
     ).toBeInTheDocument();
   });
 });

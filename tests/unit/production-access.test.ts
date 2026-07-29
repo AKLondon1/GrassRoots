@@ -53,6 +53,7 @@ describe("production workspace access", () => {
       organisationId: "organisation-riverside",
       membershipId: "membership-coach",
       role: "coach",
+      roles: ["coach"],
       capabilities: ["team:view", "events:view"],
       scopedGrants: [
         {

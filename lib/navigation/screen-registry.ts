@@ -238,6 +238,39 @@ export function getScreenHref(
   return `${path}?role=${role}`;
 }
 
+/**
+ * The landing screen for a member holding `roles`, which arrive already ordered
+ * by priority from `resolveProductionWorkspaceAccess`.
+ *
+ * It must respect `capabilities`, not just the role. `getDefaultScreen` returns the
+ * first *registered* screen for a role, which the member may have no permission to
+ * open: the club default is `overview`, gated on `club:view`, and a club admin whose
+ * roles grant `club:manage` but not `club:view` would be redirected straight into
+ * "Overview is not available for this role". Land them on the first screen they can
+ * actually open instead.
+ *
+ * Falls back to the role's registered default when nothing is permitted, which the
+ * shell then renders as `NoScreensState` rather than a denial wall.
+ */
+export function getDefaultScreenForRoles(
+  roles: readonly AppRole[],
+  capabilities: readonly string[],
+): ScreenDefinition {
+  const role = roles[0] ?? "parent";
+  return getAllowedScreensForRole(role, capabilities)[0] ?? getDefaultScreen(role);
+}
+
 export function parseAppRole(value: string | undefined): AppRole {
   return appRoles.find((role) => role === value) ?? "parent";
+}
+
+/**
+ * Like `parseAppRole` but without its `"parent"` default. Production routing must
+ * be able to tell "no role was requested" from "parent was requested", because the
+ * caller falls back to the member's highest-priority held role, not to parent.
+ */
+export function parseRequestedRole(
+  value: string | undefined,
+): AppRole | undefined {
+  return appRoles.find((role) => role === value);
 }

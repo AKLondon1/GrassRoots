@@ -50,10 +50,14 @@ describe("Supabase workspace route", () => {
     });
 
     expect(access.getUser).toHaveBeenCalledOnce();
+    // The forged role is forwarded, not trusted: resolveProductionWorkspaceAccess
+    // honours a requested role only when the member holds it, so the resolved role
+    // below stays "coach". That fallback is pinned in tenancy-service.test.ts.
     expect(access.resolve).toHaveBeenCalledWith(
       expect.anything(),
       "riverside-juniors",
       "adult-coach",
+      "platform",
     );
     expect(result).toMatchObject({
       props: {

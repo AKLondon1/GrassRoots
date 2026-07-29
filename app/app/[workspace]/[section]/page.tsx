@@ -15,7 +15,9 @@ import { brand } from "@/lib/brand";
 import { getDemoSession } from "@/lib/demo/session";
 import { environment } from "@/lib/env";
 import {
+  appRoles,
   parseAppRole,
+  parseRequestedRole,
   resolveScreenSection,
   type AppRole,
 } from "@/lib/navigation/screen-registry";
@@ -51,12 +53,15 @@ export default async function WorkspaceSectionPage({
   const query = await searchParams;
   const cursor = parseUuidCursor(query.cursor);
   let role: AppRole;
+  let roles: readonly AppRole[];
   let capabilities: readonly string[];
   let organisationId: string | null = null;
 
   if (environment.dataMode === "demo") {
     const requestedRole = Array.isArray(query.role) ? query.role[0] : query.role;
     role = parseAppRole(requestedRole);
+    // The demo deliberately offers every role, since browsing them is the point.
+    roles = appRoles;
     const session = getDemoSession(role);
     if (workspace !== session.organisation.slug) notFound();
     capabilities = [
@@ -75,10 +80,18 @@ export default async function WorkspaceSectionPage({
       );
     }
 
+    // An unrecognised ?role= resolves to undefined rather than "parent", so the
+    // member falls back to their highest-priority held role. A role they do not
+    // hold is ignored by resolveProductionWorkspaceAccess, so this cannot widen
+    // access.
+    const requestedRole = parseRequestedRole(
+      Array.isArray(query.role) ? query.role[0] : query.role,
+    );
     const access = await resolveProductionWorkspaceAccess(
       createSupabaseTenancyAccessReader(supabase),
       workspace,
       data.user.id,
+      requestedRole,
     );
     if (access.status === "denied") {
       return (
@@ -92,6 +105,7 @@ export default async function WorkspaceSectionPage({
       );
     }
     role = access.role;
+    roles = access.roles;
     capabilities = access.capabilities;
     organisationId = access.organisationId;
   }
@@ -180,6 +194,7 @@ export default async function WorkspaceSectionPage({
       capabilities={capabilities}
       isDemo={environment.dataMode === "demo"}
       role={role}
+      roles={roles}
       workspace={workspace}
     >
       {screenContent}

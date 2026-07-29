@@ -641,3 +641,10 @@ on conflict (id) do nothing;
 insert into public.organisation_feature_flags (id,organisation_id,feature_flag_id,enabled,rationale,expires_at) values
   ('00000000-0000-4000-8000-000000004241','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000004240',true,'Founding club acceptance testing','2026-09-30T23:59:59Z')
 on conflict (id) do nothing;
+
+-- The seed grants role permissions by hand above, and runs after every migration,
+-- so without this it would silently undo the canonical role model in
+-- 0020_role_model.sql. Re-apply it last: the migration is the single source of
+-- truth for club-admin, owner, manager, coach and guardian. The six specialist
+-- roles seeded above are left exactly as they are.
+select public.apply_standard_role_model('00000000-0000-4000-8000-000000000101');

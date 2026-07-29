@@ -28,7 +28,7 @@ test("illustrative workspace shell adapts navigation and role content", async ({
     "/app/riverside-juniors/schedule?role=parent",
   );
 
-  await page.getByRole("combobox", { name: "Preview role" }).selectOption("coach");
+  await page.getByRole("combobox", { name: "Acting as" }).selectOption("coach");
   await expect(page).toHaveURL(/\/app\/riverside-juniors\/today\?role=coach$/);
   await expect(
     page.getByRole("heading", { level: 1, name: "Today with Under 11s" }),
