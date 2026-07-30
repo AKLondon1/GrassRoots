@@ -9,13 +9,9 @@ import { AvailabilitySection } from "@/features/screens/parent/sections/availabi
 import { EventSection } from "@/features/screens/parent/sections/event";
 import { HomeSection } from "@/features/screens/parent/sections/home";
 import { PollsSection } from "@/features/screens/parent/sections/polls";
+import { ScheduleSection } from "@/features/screens/parent/sections/schedule";
 import { SquadSection } from "@/features/screens/parent/sections/squad";
-import {
-  EventPanel,
-  eventColumns,
-  type EventRow,
-  type SectionContext,
-} from "@/features/screens/parent/sections/shared";
+import type { SectionContext } from "@/features/screens/parent/sections/shared";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -92,21 +88,4 @@ async function renderSection(section: string, context: SectionContext) {
   if (section === "squad") return await SquadSection(context);
   if (section === "event") return await EventSection(context);
   return await ScheduleSection(context);
-}
-
-/**
- * Every upcoming commitment for this child's teams.
- *
- * The last section still living in the orchestrator. It is a plain list today; the
- * design also asks for a private calendar feed link, which needs a token-issuing
- * path rather than a query, because `private_calendar_tokens` stores only a digest
- * and the plaintext is never persisted. That is a small feature, not a port, so it
- * is deliberately not bolted on here.
- */
-async function ScheduleSection({ db, organisationId, child, now }: SectionContext) {
-  const { data: eventData, error: eventError } = await db.from("event_instances").select(eventColumns).eq("organisation_id", organisationId).in("team_id", child.teamIds).neq("status", "cancelled").gte("ends_at", now).order("starts_at").limit(25);
-  if (eventError) throw new Error("We could not load your linked football updates.");
-  const events = (eventData ?? []) as EventRow[];
-  if (!events.length) return <EmptyState title="No linked activity yet" description={`Upcoming events for ${child.firstName} will appear here.`} />;
-  return <section data-testid="parent-schedule" className="space-y-4" aria-label="Upcoming schedule">{events.map((event) => <EventPanel event={event} key={event.id} />)}</section>;
 }
