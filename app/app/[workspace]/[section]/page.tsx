@@ -34,6 +34,7 @@ import { PlatformOperationsScreen } from "@/features/screens/platform/operations
 import { ProductionClubGovernanceScreen, ProductionParentAccountScreen, ProductionPlatformOperationsScreen } from "@/features/screens/production-governance";
 import { ProductionCoachCoreOverview } from "@/features/screens/coach/production-core-overview";
 import { TeamPeoplePanel } from "@/features/screens/coach/production-team-people";
+import { ProductionCoachScheduleScreen } from "@/features/screens/coach/production-schedule";
 import { parseUuidCursor } from "@/lib/pagination/keyset";
 
 export const metadata: Metadata = {
@@ -134,6 +135,7 @@ export default async function WorkspaceSectionPage({
   const parentAccountSections = new Set(["payments", "consents", "messages", "notifications", "household", "calendar", "help"]);
   const coachCoreSections = new Set(["today", "team", "calendar", "event-editor", "availability", "squad", "match-day", "formation", "playing-time", "attendance", "training", "drills", "players", "development", "compose", "volunteers"]);
   const phase4CoachSections = new Set(["match-day", "formation", "playing-time", "attendance", "training", "drills", "players", "development", "compose", "volunteers"]);
+  const coachScheduleSections = new Set(["today", "calendar", "event-editor"]);
   const clubOperationsSections = new Set([
     "overview", "calendar", "teams", "seasons", "people", "invitations", "venues",
     "pitch-planner", "inspections", "maintenance", "fixtures", "opposition",
@@ -181,7 +183,13 @@ export default async function WorkspaceSectionPage({
     screenContent = <ProductionParentDevelopmentScreen organisationId={organisationId} />;
   } else if (environment.dataMode !== "demo" && role === "parent" && parentCoreSections.has(section) && section !== "child" && organisationId) {
     screenContent = <ProductionParentCoreFootballScreen organisationId={organisationId} section={section} workspace={workspace} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && coachScheduleSections.has(section) && organisationId) {
+    screenContent = <ProductionCoachScheduleScreen organisationId={organisationId} section={section} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && isCoreFootballSection && organisationId) {
+    // `team` and `availability` stay on the overview. `team` is still a JSON dump,
+    // but `availability` renders the MagicLinkIssuer over
+    // list_magic_availability_scopes, which nothing else replaces. Deleting this
+    // file, as the plan suggested, would have removed that.
     screenContent = <ProductionCoachCoreOverview organisationId={organisationId} section={section} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && isCoreFootballSection) {
     screenContent = (

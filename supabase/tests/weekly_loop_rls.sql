@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(43);
+select plan(48);
 
 -- Runs the given statements in order inside a subtransaction that ALWAYS rolls
 -- back, and reports what happened as a SQLSTATE: '00000' when every statement
@@ -1074,6 +1074,75 @@ select is(
   '23514',
   'an idempotency key below eight characters is rejected'
 );
+
+-- ===========================================================================
+-- Task 7: team staff can read the lists the friendly form offers.
+--
+-- Migration 0026. Coach ...0302 holds pitches:book and fixtures:manage through a
+-- TEAM-scoped assignment on ...0802, and holds none of pitches:manage,
+-- pitches:inspect, venues:manage or opposition:manage. Before 0026 every one of
+-- these counts was zero, so the form rendered three empty dropdowns.
+-- ===========================================================================
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+select is(
+  (select count(*) from public.reservation_units
+   where organisation_id = '00000000-0000-4000-8000-000000000101'),
+  5::bigint,
+  'a pitches:book coach can read the club pitch list'
+);
+
+select is(
+  (select count(*) from public.venues
+   where organisation_id = '00000000-0000-4000-8000-000000000101'),
+  1::bigint,
+  'a pitches:book coach can read the venue a pitch belongs to'
+);
+
+select is(
+  (select count(*) from public.opposition_contacts
+   where organisation_id = '00000000-0000-4000-8000-000000000101'),
+  1::bigint,
+  'a fixtures:manage coach can read the opposition address book'
+);
+
+-- The read is widened, the write is not. Creating a pitch still needs
+-- pitches:manage, which a coach does not hold.
+--
+-- Asserted as an INSERT rather than an UPDATE on purpose. RLS *filters* an
+-- UPDATE: a row the caller cannot reach through a FOR UPDATE or FOR ALL policy
+-- is simply not in the set, so the statement succeeds having changed nothing and
+-- reports '00000'. Only a WITH CHECK violation raises 42501, and that needs a row
+-- being written. An UPDATE assertion here would pass whether or not the policy
+-- held, which is worse than no assertion.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.reservation_units (
+        organisation_id, facility_id, name, capacity
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002011',
+        'Pitch invented by a coach', 11
+      )$$
+  ]),
+  '42501',
+  'reading the pitch list does not let a coach create a pitch'
+);
+
+reset role;
+
+-- A guardian holds neither capability, so nothing above reaches them.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000201', true);
+
+select is(
+  (select count(*) from public.reservation_units),
+  0::bigint,
+  'a guardian still sees no pitches'
+);
+
+reset role;
 
 select * from finish();
 rollback;
