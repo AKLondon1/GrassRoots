@@ -202,3 +202,65 @@ Task 12 (announcements plus automatic change notices, now unblocked by 0028), th
 (season rollover by cloning teams), then 13 (the Phase 1 gate: browser pass per role
 tier against local Supabase, e2e with `NEXT_PUBLIC_DATA_MODE=demo` and `--workers=2`,
 and deploying 0023 to 0028 in order).
+
+---
+
+## 9. Addendum, written after the scaffold landed
+
+**Scaffold commit `86fb6e1`, "feat: give the parent journey one child at a time".**
+Sections 1 to 8 above still stand except where corrected here.
+
+### Where the work actually is
+
+Not the worktree section 1 names. Branch `claude/task-11-handoff-rewrite-5ebb26`,
+worktree `.claude/worktrees/task-11-handoff-rewrite-1261b4`, fast-forwarded from
+`ebadd60`. `ea855c4` was an ancestor, so no history was rewritten and the
+`grassroots-website-build-f6feed` worktree was not touched.
+
+**Verification at `86fb6e1`**, all reproduced, not inferred:
+
+| Check | Result |
+|---|---|
+| `npm run test:db` | 489 pgTAP, 13 files |
+| `npx vitest run` | 514 across 104 files |
+| `npm run typecheck` | clean |
+| `npx eslint <changed files>` | clean |
+
+`npm run lint` repo-wide fails on **two pre-existing warnings** in
+`components/shell/role-switcher.tsx` (`getDefaultScreen`, `getScreenHref` imported and
+unused). They are present at `ebadd60`, before any of this work. Lint changed files only,
+or fix those two separately.
+
+### Correction 1: the schedule section cannot read a real calendar token
+
+Section 3 says `schedule` uses a "real token from `private_calendar_tokens`". It cannot.
+That table stores `token_digest` only (`0003_events_polls_squads.sql:339`, constrained to
+`^[0-9a-f]{64}$`), the plaintext is never persisted, and the seeded row at `seed.sql:449`
+carries a placeholder digest of sixty-four `b` characters that is not the hash of anything.
+
+**No code path in the repository issues one.** `resolve_private_calendar_token` only
+resolves a digest that already exists.
+
+So `schedule` has to *issue* a token, not read one: `randomBytes(32).toString("base64url")`,
+store `sha256(token)` as the digest, render the URL once. The `calendar_tokens_own` policy
+(`0003:1224`) already grants a member insert and select on their own row, so this needs no
+admin client. The working pattern is `app/api/availability/magic-links/route.ts:33-37`.
+
+### Correction 2: the seed has no poll respondents at all
+
+Section 4 says assertions 19 and 20 pin both halves against seeded rows. They pin both
+halves, but against rows **the test creates itself** (`…3002` open, `…3007` closed).
+`select * from poll_respondents` against a fresh `db reset` returns **zero rows**.
+
+Poll `…1301` is also still `status = 'open'` with `closes_at` of 2026-07-24, so it is past
+its deadline rather than closed by status. Any fix must treat *either* condition as closed.
+
+The practical consequence for whoever writes the polls section: after correcting the
+deadline filter the seeded poll will render, and it will render **with no respondent row
+and therefore no form**. That is the correct output for the seed, not a bug in the fix.
+
+### What is left
+
+Eight section commits, and the `saveProductionPollResponse` respondent-ownership fix from
+section 4, which is still unaddressed. The line to change for the polls trap now lives in
+`PollsSection` in `production-core-football.tsx`, not at the old line 77.
