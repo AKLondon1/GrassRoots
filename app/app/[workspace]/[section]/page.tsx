@@ -45,7 +45,7 @@ export const metadata: Metadata = {
 
 interface WorkspaceSectionPageProps {
   params: Promise<{ section: string; workspace: string }>;
-  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; instance?: string; cursor?: string | string[] }>;
+  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; instance?: string; cursor?: string | string[]; child?: string }>;
 }
 
 export default async function WorkspaceSectionPage({
@@ -183,7 +183,10 @@ export default async function WorkspaceSectionPage({
   } else if (environment.dataMode !== "demo" && role === "parent" && section === "child" && organisationId) {
     screenContent = <ProductionParentDevelopmentScreen organisationId={organisationId} />;
   } else if (environment.dataMode !== "demo" && role === "parent" && parentCoreSections.has(section) && section !== "child" && organisationId) {
-    screenContent = <ProductionParentCoreFootballScreen organisationId={organisationId} section={section} workspace={workspace} />;
+    // `child` selects between linked children. An unrecognised id falls back to the
+    // first, because the candidate list is narrowed to this guardian before the URL is
+    // consulted, so a stale or hostile id is simply absent from it.
+    screenContent = <ProductionParentCoreFootballScreen organisationId={organisationId} section={section} workspace={workspace} childId={query.child} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && section === "squad" && organisationId) {
     // `instance` is set by the "Pick the squad" link on every event card.
     screenContent = <ProductionSquadSelectionScreen organisationId={organisationId} workspace={workspace} instanceId={query.instance} />;
