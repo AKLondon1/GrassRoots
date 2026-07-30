@@ -35,6 +35,7 @@ import { ProductionClubGovernanceScreen, ProductionParentAccountScreen, Producti
 import { ProductionCoachCoreOverview } from "@/features/screens/coach/production-core-overview";
 import { TeamPeoplePanel } from "@/features/screens/coach/production-team-people";
 import { ProductionCoachScheduleScreen } from "@/features/screens/coach/production-schedule";
+import { ProductionSquadSelectionScreen } from "@/features/screens/coach/production-squad-selection";
 import { parseUuidCursor } from "@/lib/pagination/keyset";
 
 export const metadata: Metadata = {
@@ -44,7 +45,7 @@ export const metadata: Metadata = {
 
 interface WorkspaceSectionPageProps {
   params: Promise<{ section: string; workspace: string }>;
-  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; cursor?: string | string[] }>;
+  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; instance?: string; cursor?: string | string[] }>;
 }
 
 export default async function WorkspaceSectionPage({
@@ -183,6 +184,9 @@ export default async function WorkspaceSectionPage({
     screenContent = <ProductionParentDevelopmentScreen organisationId={organisationId} />;
   } else if (environment.dataMode !== "demo" && role === "parent" && parentCoreSections.has(section) && section !== "child" && organisationId) {
     screenContent = <ProductionParentCoreFootballScreen organisationId={organisationId} section={section} workspace={workspace} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && section === "squad" && organisationId) {
+    // `instance` is set by the "Pick the squad" link on every event card.
+    screenContent = <ProductionSquadSelectionScreen organisationId={organisationId} workspace={workspace} instanceId={query.instance} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && coachScheduleSections.has(section) && organisationId) {
     screenContent = <ProductionCoachScheduleScreen organisationId={organisationId} section={section} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && isCoreFootballSection && organisationId) {

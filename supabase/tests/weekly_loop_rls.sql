@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(48);
+select plan(53);
 
 -- Runs the given statements in order inside a subtransaction that ALWAYS rolls
 -- back, and reports what happened as a SQLSTATE: '00000' when every statement
@@ -1140,6 +1140,110 @@ select is(
   (select count(*) from public.reservation_units),
   0::bigint,
   'a guardian still sees no pitches'
+);
+
+reset role;
+
+-- ===========================================================================
+-- Task 10: picking and publishing a squad.
+--
+-- Assertion 5 already pins that squad_members has no UPDATE policy, and
+-- assertion 6 that publishing needs both columns. These pin what the picker
+-- itself must not get wrong. Instance ...1209 is the Task 6b fixture and has no
+-- squad yet; the seed's ...1201 already has squad ...1401.
+-- ===========================================================================
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+-- Task 10 assertion A: a squads:manage coach can open a draft squad.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squads (organisation_id, event_instance_id, team_id, status)
+      values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001209',
+        '00000000-0000-4000-8000-000000000802', 'draft'
+      )$$
+  ]),
+  '00000',
+  'a squads:manage coach can open a draft squad for their own fixture'
+);
+
+-- Task 10 assertion B: squads is unique on (organisation_id, event_instance_id),
+-- so creation is idempotent per event and the action must tolerate the clash
+-- rather than making a second squad. The seed's squad ...1401 sits on instance
+-- ...1202, not ...1201.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squads (organisation_id, event_instance_id, team_id, status)
+      values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202',
+        '00000000-0000-4000-8000-000000000802', 'draft'
+      )$$
+  ]),
+  '23505',
+  'a second squad for the same fixture is refused'
+);
+
+-- Task 10 assertion C: unique (organisation_id, squad_id, player_id). A form that
+-- let a coach tick the same child as both selected and standby would fail here,
+-- so setSquadMembers must reject that before writing.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squad_members (
+        organisation_id, squad_id, team_id, player_id, status, position_order
+      ) values
+        ('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+         '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000604',
+         'selected', 1),
+        ('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+         '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000604',
+         'standby', 2)$$
+  ]),
+  '23505',
+  'the same child cannot be both selected and standby in one squad'
+);
+
+-- Task 10 assertion D: position_order is `> 0` where not null, so the ordering
+-- must be one-based. A zero-based array index fails here.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squad_members (
+        organisation_id, squad_id, team_id, player_id, status, position_order
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000604',
+        'selected', 0
+      )$$
+  ]),
+  '23514',
+  'position_order is one-based, so a zero-based index is rejected'
+);
+
+-- Task 10 assertion E: a child from another team cannot be put in this squad.
+--
+-- The refusal comes from the `squad_members_validate_player_team` trigger, which
+-- runs validate_event_child_team_scope() BEFORE INSERT and raises
+-- foreign_key_violation, not from the RLS policy. squad_members_insert_manage
+-- only checks the squad's team_id, which the caller supplies, and the foreign key
+-- only requires the player to exist somewhere in the organisation. Without that
+-- trigger this would be accepted.
+--
+-- Player ...0602 is an Under 7s child; squad ...1401 belongs to the Under 11s.
+-- The picker filters its columns to the fixture's own team as well, so this is
+-- defence in depth rather than the only guard.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squad_members (
+        organisation_id, squad_id, team_id, player_id, status, position_order
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000602',
+        'selected', 1
+      )$$
+  ]),
+  '23503',
+  'a child from another team cannot be added to this squad'
 );
 
 reset role;
