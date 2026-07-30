@@ -7,6 +7,7 @@ import { saveProductionAvailability } from "@/features/availability/actions";
 import { ChildSelector } from "@/features/screens/parent/child-selector";
 import { loadLinkedChildren, selectLinkedChild } from "@/features/screens/parent/linked-children";
 import { ActionsSection } from "@/features/screens/parent/sections/actions";
+import { AnnouncementsSection } from "@/features/screens/parent/sections/announcements";
 import { EventSection } from "@/features/screens/parent/sections/event";
 import { HomeSection } from "@/features/screens/parent/sections/home";
 import { PollsSection } from "@/features/screens/parent/sections/polls";
@@ -46,7 +47,6 @@ interface AvailabilityRow {
 }
 interface SquadRow { id: string; event_instance_id: string; team_id: string; status: string; published_at: string | null }
 interface SquadMemberRow { squad_id: string; player_id: string; status: "selected" | "standby" | "withdrawn" }
-interface AnnouncementRow { id: string; title: string; body: string; published_at: string }
 
 export async function ProductionParentCoreFootballScreen({
   organisationId,
@@ -119,14 +119,6 @@ async function ScheduleSection(section: string, { db, organisationId, child, now
   const events = (eventData ?? []) as EventRow[];
   if (!events.length) return <EmptyState title="No linked activity yet" description={`Upcoming events for ${child.firstName} will appear here.`} />;
   return <section className="space-y-4" aria-label={section === "actions" ? "Upcoming actions" : "Upcoming schedule"}>{events.map((event) => <EventPanel event={event} key={event.id} />)}</section>;
-}
-
-async function AnnouncementsSection({ db, organisationId }: SectionContext) {
-  const { data, error } = await db.from("announcements").select("id,title,body,published_at").eq("organisation_id", organisationId).eq("status", "published").order("published_at", { ascending: false }).limit(20);
-  if (error) throw new Error("We could not load club announcements.");
-  const announcements = (data ?? []) as AnnouncementRow[];
-  if (!announcements.length) return <EmptyState title="No announcements" description="Published updates for your linked teams will appear here." />;
-  return <section className="space-y-4">{announcements.map((item) => <article className={card} key={item.id}><Status tone="info">Club update</Status><h2 className="mt-4 text-xl font-semibold">{item.title}</h2><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted">{item.body}</p><p className="mt-4 text-xs text-muted">Published {formatDateTime(item.published_at)}</p></article>)}</section>;
 }
 
 async function AvailabilitySection({ db, organisationId, workspace, child, now }: SectionContext) {
