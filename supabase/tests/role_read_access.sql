@@ -49,7 +49,7 @@
 
 begin;
 
-select plan(35);
+select plan(37);
 
 -- Runs a SELECT and reports which of the three outcomes occurred. The statement is
 -- wrapped in a counting subquery, so it must be a bare SELECT with no trailing
@@ -403,18 +403,25 @@ select is(
   'a guardian cannot read another family availability reply'
 );
 
--- squad_members_view_linked_or_manage tests squads:view and the guardian link. It
--- does NOT test the parent squad's status, so RLS hands a family a squad that has
--- not been published. The published-only filter on the parent squad section is
--- therefore load-bearing application code, not defence in depth. If this assertion
--- ever flips to 'empty', the database has taken the job over and the filter can be
--- reconsidered; until then it must stay.
+-- Migration 0027 narrowed the guardian arm of squad_members_view_linked_or_manage
+-- to published squads, so a family cannot reach a team sheet the coach is still
+-- building. Before it, this assertion read 'visible' and the parent screen's
+-- published-only filter was the only thing standing between a parent and a
+-- half-picked squad. That filter stays, and is now defence in depth.
 select is(
   public.probe_read(
     'select 1 from public.squad_members where squad_id = ''00000000-0000-4000-8000-000000003004'''
   ),
-  'visible',
-  'RLS alone lets a family read a DRAFT squad, so the parent screen must filter on published'
+  'empty',
+  'a guardian cannot read a DRAFT squad, in the database and not merely in the screen'
+);
+
+select is(
+  public.probe_read(
+    'select 1 from public.squads where id = ''00000000-0000-4000-8000-000000003004'''
+  ),
+  'empty',
+  'a guardian cannot read the draft squad row either'
 );
 
 reset role;
@@ -429,20 +436,33 @@ select is(
   'a coach cannot read a player on a team they do not staff'
 );
 
+-- The other half of 0027, and the reason its condition is not blanket. Team staff
+-- are the people BUILDING the draft, so narrowing the guardian arm must leave the
+-- squads:manage arm alone. If this ever flips to 'empty', squad selection is broken
+-- for exactly the person the screen exists for.
+select is(
+  public.probe_read(
+    'select 1 from public.squad_members where squad_id = ''00000000-0000-4000-8000-000000003004'''
+  ),
+  'visible',
+  'a coach can still read a DRAFT squad for the team they staff'
+);
+
 -- ---------------------------------------------------------------------------
 -- D. Announcements, which Task 12 extends
 --
--- announcement_recipients carries exactly one SELECT policy,
--- announcement_recipients_own (0006_comms_finance.sql:538), which matches on the
--- reader's own membership. Nothing grants the author of an announcement sight of
--- who received it. D2 and D3 record that as the current, deliberate state: if
--- Task 12 ever wants a delivery or read-receipt view, it needs a migration, and
--- these two assertions are where that decision gets made rather than discovered.
+-- Until 0028, announcement_recipients carried exactly one SELECT policy,
+-- announcement_recipients_own (0006_comms_finance.sql:538), matching the reader's
+-- own membership. An author could see their own copy and nothing else, so "did the
+-- team get this?" had no answer in the product. 0028 added
+-- announcement_recipients_publisher, scoped to whoever may publish: organisation-
+-- wide for club administrators and the communications role, team-scoped for a coach.
 --
 -- Both probe ANOTHER member's row on purpose. An unqualified count is not the same
 -- question: the coach is inside the Under 11s audience, so the publish trigger gave
 -- them a delivery row of their own, and `select count(*)` returns 1 whether or not
--- an author can see anybody else. That reads as access where there is none.
+-- an author can see anybody else. That would have read as access before there was
+-- any, and would read as success now without testing what 0028 actually added.
 -- ---------------------------------------------------------------------------
 
 select is(
@@ -455,8 +475,8 @@ select is(
   public.probe_read(
     'select 1 from public.announcement_recipients where membership_id = ''00000000-0000-4000-8000-000000000301'''
   ),
-  'empty',
-  'a coach cannot read ANOTHER member delivery row: no policy grants an author that'
+  'visible',
+  'a coach can read another member delivery row for their own team announcement'
 );
 
 reset role;
@@ -467,8 +487,8 @@ select is(
   public.probe_read(
     'select 1 from public.announcement_recipients where membership_id = ''00000000-0000-4000-8000-000000000301'''
   ),
-  'empty',
-  'a club administrator cannot read another member delivery row either'
+  'visible',
+  'a club administrator can read another member delivery row, holding org-wide announcements:manage'
 );
 
 reset role;
