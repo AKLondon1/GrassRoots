@@ -4,7 +4,16 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
 import { Status } from "@/components/ui/status";
 
-import { EventPanel, card, eventColumns, linkStyle, type EventRow, type SectionContext } from "./shared";
+import {
+  EventPanel,
+  card,
+  eventColumns,
+  isAwaitingReply,
+  linkStyle,
+  type AvailabilityResponseRow,
+  type EventRow,
+  type SectionContext,
+} from "./shared";
 
 /**
  * The parent landing screen: what needs answering, and what is next.
@@ -19,26 +28,6 @@ import { EventPanel, card, eventColumns, linkStyle, type EventRow, type SectionC
  * anything. It is deliberately absent when nothing is outstanding, because a glowing
  * "you are up to date" is a demand for attention that has not earned it.
  */
-
-interface ResponseRow {
-  event_instance_id: string;
-  status: "available" | "unavailable" | "unsure";
-}
-
-/**
- * An event still waiting on this family. Scheduled, not yet started, carrying a
- * deadline that has not passed, and with no reply saved.
- *
- * The deadline is compared as an instant. `now` is Z-suffixed and PostgREST returns
- * `response_deadline` with a `+00:00` offset, so comparing the two as strings sorts
- * correct timestamps wrongly.
- */
-function isOutstanding(event: EventRow, responses: readonly ResponseRow[], now: string): boolean {
-  if (event.status !== "scheduled") return false;
-  if (!event.response_deadline) return false;
-  if (new Date(event.response_deadline).getTime() < new Date(now).getTime()) return false;
-  return !responses.some((response) => response.event_instance_id === event.id);
-}
 
 export async function HomeSection({ db, organisationId, workspace, child, now }: SectionContext) {
   const { data: eventData, error: eventError } = await db
@@ -65,7 +54,7 @@ export async function HomeSection({ db, organisationId, workspace, child, now }:
         )
     : { data: [], error: null };
   if (responseError) throw new Error("We could not load your saved replies.");
-  const responses = (responseData ?? []) as ResponseRow[];
+  const responses = (responseData ?? []) as AvailabilityResponseRow[];
 
   if (!events.length) {
     return (
@@ -76,7 +65,7 @@ export async function HomeSection({ db, organisationId, workspace, child, now }:
     );
   }
 
-  const outstanding = events.filter((event) => isOutstanding(event, responses, now));
+  const outstanding = events.filter((event) => isAwaitingReply(event, responses, now));
   const [nextEvent, ...rest] = events;
   const comingUp = rest[0];
   const needsReply = outstanding.length > 0;

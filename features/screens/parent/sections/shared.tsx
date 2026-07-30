@@ -95,6 +95,34 @@ export function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("en-GB");
 }
 
+export interface AvailabilityResponseRow {
+  event_instance_id: string;
+  status: "available" | "unavailable" | "unsure";
+}
+
+/**
+ * Is this event still waiting on a reply from this family?
+ *
+ * Scheduled, not yet started, carrying a deadline that has not passed, and with no
+ * response saved. Shared because `home` counts these and `actions` lists them, and
+ * two definitions of "outstanding" that drift apart would show a parent a count on
+ * one screen and a different set of cards on the next.
+ *
+ * The deadline is compared as an instant. `now` is Z-suffixed and PostgREST returns
+ * `response_deadline` with a `+00:00` offset, so comparing the two as strings sorts
+ * correct timestamps wrongly.
+ */
+export function isAwaitingReply(
+  event: EventRow,
+  responses: readonly AvailabilityResponseRow[],
+  now: string,
+): boolean {
+  if (event.status !== "scheduled") return false;
+  if (!event.response_deadline) return false;
+  if (new Date(event.response_deadline).getTime() < new Date(now).getTime()) return false;
+  return !responses.some((response) => response.event_instance_id === event.id);
+}
+
 /**
  * One event, as a card.
  *

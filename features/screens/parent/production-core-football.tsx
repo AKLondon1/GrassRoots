@@ -6,6 +6,7 @@ import { Status } from "@/components/ui/status";
 import { saveProductionAvailability } from "@/features/availability/actions";
 import { ChildSelector } from "@/features/screens/parent/child-selector";
 import { loadLinkedChildren, selectLinkedChild } from "@/features/screens/parent/linked-children";
+import { ActionsSection } from "@/features/screens/parent/sections/actions";
 import { HomeSection } from "@/features/screens/parent/sections/home";
 import { PollsSection } from "@/features/screens/parent/sections/polls";
 import {
@@ -98,6 +99,7 @@ export async function ProductionParentCoreFootballScreen({
 
 async function renderSection(section: string, context: SectionContext) {
   if (section === "home") return await HomeSection(context);
+  if (section === "actions") return await ActionsSection(context);
   if (section === "announcements") return await AnnouncementsSection(context);
   if (section === "availability") return await AvailabilitySection(context);
   if (section === "polls") return await PollsSection(context);
