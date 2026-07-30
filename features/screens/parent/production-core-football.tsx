@@ -6,6 +6,7 @@ import { Status } from "@/components/ui/status";
 import { saveProductionAvailability } from "@/features/availability/actions";
 import { ChildSelector } from "@/features/screens/parent/child-selector";
 import { loadLinkedChildren, selectLinkedChild } from "@/features/screens/parent/linked-children";
+import { HomeSection } from "@/features/screens/parent/sections/home";
 import { PollsSection } from "@/features/screens/parent/sections/polls";
 import {
   card,
@@ -96,6 +97,7 @@ export async function ProductionParentCoreFootballScreen({
 }
 
 async function renderSection(section: string, context: SectionContext) {
+  if (section === "home") return await HomeSection(context);
   if (section === "announcements") return await AnnouncementsSection(context);
   if (section === "availability") return await AvailabilitySection(context);
   if (section === "polls") return await PollsSection(context);
@@ -105,19 +107,15 @@ async function renderSection(section: string, context: SectionContext) {
 }
 
 /**
- * Upcoming events for this child's teams. Still shared by `home`, `actions` and
- * `schedule` until each is rewritten to its own shape.
+ * Upcoming events for this child's teams. Still shared by `actions` and `schedule`
+ * until each is rewritten to its own shape.
  */
 async function ScheduleSection(section: string, { db, organisationId, child, now }: SectionContext) {
-  const [{ data: eventData, error: eventError }, { data: announcementData, error: announcementError }] = await Promise.all([
-    db.from("event_instances").select(eventColumns).eq("organisation_id", organisationId).in("team_id", child.teamIds).neq("status", "cancelled").gte("ends_at", now).order("starts_at").limit(25),
-    db.from("announcements").select("id,title,body,published_at").eq("organisation_id", organisationId).eq("status", "published").order("published_at", { ascending: false }).limit(20),
-  ]);
-  if (eventError || announcementError) throw new Error("We could not load your linked football updates.");
+  const { data: eventData, error: eventError } = await db.from("event_instances").select(eventColumns).eq("organisation_id", organisationId).in("team_id", child.teamIds).neq("status", "cancelled").gte("ends_at", now).order("starts_at").limit(25);
+  if (eventError) throw new Error("We could not load your linked football updates.");
   const events = (eventData ?? []) as EventRow[];
-  const announcements = (announcementData ?? []) as AnnouncementRow[];
-  if (!events.length && !announcements.length) return <EmptyState title="No linked activity yet" description={`Upcoming events for ${child.firstName} and published club updates will appear here.`} />;
-  return <div className="space-y-5">{events.length ? <section className="space-y-4" aria-label={section === "actions" ? "Upcoming actions" : "Upcoming schedule"}>{events.map((event) => <EventPanel event={event} key={event.id} />)}</section> : null}{section === "home" && announcements.length ? <section className={card}><h2 className="text-xl font-semibold">Latest club updates</h2><ul className="mt-4 divide-y divide-border">{announcements.slice(0, 5).map((item) => <li className="py-3" key={item.id}><p className="font-semibold">{item.title}</p><p className="mt-1 line-clamp-2 text-sm text-muted">{item.body}</p></li>)}</ul></section> : null}</div>;
+  if (!events.length) return <EmptyState title="No linked activity yet" description={`Upcoming events for ${child.firstName} will appear here.`} />;
+  return <section className="space-y-4" aria-label={section === "actions" ? "Upcoming actions" : "Upcoming schedule"}>{events.map((event) => <EventPanel event={event} key={event.id} />)}</section>;
 }
 
 async function AnnouncementsSection({ db, organisationId }: SectionContext) {
