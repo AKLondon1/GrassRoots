@@ -7,6 +7,7 @@ import { saveProductionAvailability } from "@/features/availability/actions";
 import { ChildSelector } from "@/features/screens/parent/child-selector";
 import { loadLinkedChildren, selectLinkedChild } from "@/features/screens/parent/linked-children";
 import { ActionsSection } from "@/features/screens/parent/sections/actions";
+import { EventSection } from "@/features/screens/parent/sections/event";
 import { HomeSection } from "@/features/screens/parent/sections/home";
 import { PollsSection } from "@/features/screens/parent/sections/polls";
 import {
@@ -126,14 +127,6 @@ async function AnnouncementsSection({ db, organisationId }: SectionContext) {
   const announcements = (data ?? []) as AnnouncementRow[];
   if (!announcements.length) return <EmptyState title="No announcements" description="Published updates for your linked teams will appear here." />;
   return <section className="space-y-4">{announcements.map((item) => <article className={card} key={item.id}><Status tone="info">Club update</Status><h2 className="mt-4 text-xl font-semibold">{item.title}</h2><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted">{item.body}</p><p className="mt-4 text-xs text-muted">Published {formatDateTime(item.published_at)}</p></article>)}</section>;
-}
-
-async function EventSection({ db, organisationId, child, now }: SectionContext) {
-  const { data, error } = await db.from("event_instances").select(eventColumns).eq("organisation_id", organisationId).in("team_id", child.teamIds).neq("status", "cancelled").gte("ends_at", now).order("starts_at").limit(10);
-  if (error) throw new Error("We could not load linked team events.");
-  const events = (data ?? []) as EventRow[];
-  if (!events.length) return <EmptyState title="No upcoming linked events" description={`Published training, matches and meetings for ${child.firstName}'s teams will appear here.`} />;
-  return <section className="space-y-4" aria-label="Upcoming linked events">{events.map((event) => <EventPanel event={event} key={event.id} />)}</section>;
 }
 
 async function AvailabilitySection({ db, organisationId, workspace, child, now }: SectionContext) {
