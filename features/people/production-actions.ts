@@ -43,14 +43,12 @@ export async function createTeam(formData: FormData) {
   revalidatePath(`/app/${input.workspace}/teams`);
 }
 
-export async function createPlayer(formData: FormData) {
-  const input = z.object({ ...context, firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), dateOfBirth: z.iso.date() }).parse(Object.fromEntries(formData));
-  await requireCapability(input.workspace, "people:manage");
-  if (input.dateOfBirth > new Date().toISOString().slice(0, 10)) throw new Error("Date of birth cannot be in the future.");
-  const { error } = await (await database()).from("players").insert({ organisation_id: input.organisationId, first_name: input.firstName, last_name: input.lastName, date_of_birth: input.dateOfBirth });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/app/${input.workspace}/people`);
-}
+// createPlayer lived here. It inserted straight into `players` under
+// organisation-scoped people:manage, so team staff could not use it at all, and
+// any player it created belonged to no team and was therefore invisible to
+// availability, squads and every expected-player count. Replaced by
+// addPlayerToTeam in features/people/team-people-actions.ts, which calls the
+// add_player_to_team RPC and writes the player and the team membership together.
 
 export async function createOppositionContact(formData: FormData) {
   const input = z.object({ ...context, clubName: z.string().trim().min(2).max(120), displayName: z.string().trim().min(2).max(120), email: z.string().trim().toLowerCase().email().optional().or(z.literal("")), phone: z.string().trim().max(40).optional().or(z.literal("")) })

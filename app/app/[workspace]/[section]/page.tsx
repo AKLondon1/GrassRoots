@@ -33,6 +33,7 @@ import { ClubGovernanceScreen } from "@/features/screens/club/governance";
 import { PlatformOperationsScreen } from "@/features/screens/platform/operations";
 import { ProductionClubGovernanceScreen, ProductionParentAccountScreen, ProductionPlatformOperationsScreen } from "@/features/screens/production-governance";
 import { ProductionCoachCoreOverview } from "@/features/screens/coach/production-core-overview";
+import { TeamPeoplePanel } from "@/features/screens/coach/production-team-people";
 import { parseUuidCursor } from "@/lib/pagination/keyset";
 
 export const metadata: Metadata = {
@@ -172,7 +173,10 @@ export default async function WorkspaceSectionPage({
     screenContent = <ProductionSupportOperationsScreen organisationId={organisationId} workspace={workspace} readRequest={{ sessionId: query.supportSessionId, resourceType: query.resourceType, resourceId: query.resourceId }} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && phase4CoachSections.has(section) && organisationId) {
     const coachingSelection = { teamId: query.teamId, matchId: query.matchId, sessionId: query.sessionId };
-    screenContent = <div className="space-y-5"><ProductionCoachingScopeSelector organisationId={organisationId} section={section} selection={coachingSelection}/><ProductionCoachingScreen organisationId={organisationId} section={section} workspace={workspace} selection={coachingSelection}/></div>;
+    // `players` is already where a coach goes to look at their squad, so adding
+    // players and parents belongs on that same screen rather than a new route.
+    // The development view stays below it, untouched.
+    screenContent = <div className="space-y-5"><ProductionCoachingScopeSelector organisationId={organisationId} section={section} selection={coachingSelection}/>{section === "players" ? <TeamPeoplePanel organisationId={organisationId} workspace={workspace}/> : null}<ProductionCoachingScreen organisationId={organisationId} section={section} workspace={workspace} selection={coachingSelection}/></div>;
   } else if (environment.dataMode !== "demo" && role === "parent" && section === "child" && organisationId) {
     screenContent = <ProductionParentDevelopmentScreen organisationId={organisationId} />;
   } else if (environment.dataMode !== "demo" && role === "parent" && parentCoreSections.has(section) && section !== "child" && organisationId) {

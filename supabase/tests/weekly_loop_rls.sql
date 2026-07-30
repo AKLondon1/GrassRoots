@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(34);
+select plan(40);
 
 -- Runs the given statements in order inside a subtransaction that ALWAYS rolls
 -- back, and reports what happened as a SQLSTATE: '00000' when every statement
@@ -883,6 +883,107 @@ select is(
 );
 
 reset role;
+
+-- ===========================================================================
+-- Task 8: adding a parent through add_guardian_for_player.
+--
+-- role_model.sql already asserts who may call this RPC and for which team. What
+-- is asserted here is what the call leaves behind, because Task 8's application
+-- code depends on all of it: the permission row, the shared household, and guardian
+-- reuse by email.
+--
+-- These read rows back, so they cannot use probe_sqlstate, whose subtransaction
+-- always rolls back. They run as superuser against a real call instead, and the
+-- outer transaction discards everything at the end of the file.
+-- ===========================================================================
+
+-- Act as the team-scoped coach so the RPC's can_access_team check passes, then
+-- add a second guardian to Jamie Morgan (...0601), who already has guardian
+-- ...0401 in household ...0501.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+select lives_ok(
+  $$select public.add_guardian_for_player(
+      '00000000-0000-4000-8000-000000000601', 'Robin Fair',
+      'Robin.Fair@Example.TEST', 'Step-parent'
+    )$$,
+  'team staff can add a guardian for a player on their own team'
+);
+
+reset role;
+
+-- Task 8 assertion A: the new link carries a permission row, and it grants
+-- communication only. Everything wider is a later, deliberate act.
+select results_eq(
+  $$select permission.communication, permission.payments, permission.consent,
+           permission.emergency_contact, permission.restricted_contact
+    from public.guardian_permissions permission
+    join public.player_guardians link
+      on link.id = permission.player_guardian_id
+     and link.organisation_id = permission.organisation_id
+    join public.guardians guardian
+      on guardian.id = link.guardian_id
+     and guardian.organisation_id = link.organisation_id
+    where guardian.email = 'robin.fair@example.test'$$,
+  $$values (true, false, false, false, false)$$,
+  'a guardian added by team staff starts with communication only'
+);
+
+-- Task 8 assertion B: the email is normalised, so "Robin.Fair@Example.TEST"
+-- cannot become a second guardian record alongside the lower-cased one. The
+-- guardians table checks `email = lower(email)`, so the RPC must fold it.
+select is(
+  (select count(*) from public.guardians
+   where organisation_id = '00000000-0000-4000-8000-000000000101'
+     and lower(email) = 'robin.fair@example.test'),
+  1::bigint,
+  'the guardian email is folded to lower case, creating exactly one record'
+);
+
+-- Task 8 assertion C: the second parent joins the child's existing household
+-- rather than starting a new one. This is what keeps siblings and both parents
+-- together, and it is why the application must not create households itself.
+select is(
+  (select link.household_id from public.player_guardians link
+   join public.guardians guardian
+     on guardian.id = link.guardian_id
+    and guardian.organisation_id = link.organisation_id
+   where guardian.email = 'robin.fair@example.test'),
+  (select link.household_id from public.player_guardians link
+   where link.player_id = '00000000-0000-4000-8000-000000000601'
+     and link.guardian_id = '00000000-0000-4000-8000-000000000401'),
+  'a second guardian joins the household the child already belongs to'
+);
+
+-- Task 8 assertion D: calling twice is idempotent. The form can be double
+-- submitted, and `on conflict do nothing` on the link must not leave a second
+-- permission row or a duplicate guardian.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+select lives_ok(
+  $$select public.add_guardian_for_player(
+      '00000000-0000-4000-8000-000000000601', 'Robin Fair',
+      'robin.fair@example.test', 'Step-parent'
+    )$$,
+  'adding the same guardian twice is accepted rather than erroring'
+);
+
+reset role;
+
+select is(
+  (select count(*) from public.guardian_permissions permission
+   join public.player_guardians link
+     on link.id = permission.player_guardian_id
+    and link.organisation_id = permission.organisation_id
+   join public.guardians guardian
+     on guardian.id = link.guardian_id
+    and guardian.organisation_id = link.organisation_id
+   where guardian.email = 'robin.fair@example.test'),
+  1::bigint,
+  'a repeated call leaves exactly one permission row'
+);
 
 select * from finish();
 rollback;

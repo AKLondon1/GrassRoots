@@ -10,7 +10,8 @@ import { Status } from "@/components/ui/status";
 import { allocateFacilityBooking, closeFacilityAndResolveBooking, createMaintenanceRequest, createVenue, createVolunteerShift, promoteCleanClubDocument, reserveEquipment, revokeSupportSessionAction, startSupportSession, submitSupportRequest } from "@/features/facilities/actions";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { keysetPage } from "@/lib/pagination/keyset";
-import { createAgeGroup, createOppositionContact, createPlayer, createSeason, createTeam } from "@/features/people/production-actions";
+import { createAgeGroup, createOppositionContact, createSeason, createTeam } from "@/features/people/production-actions";
+import { TeamPeoplePanel } from "@/features/screens/coach/production-team-people";
 
 interface UnitRow { id: string; name: string; capacity: number; accessible: boolean; floodlit: boolean }
 interface BookingRow { id: string; reservation_unit_id: string; event_instance_id: string | null; title: string; starts_at: string; ends_at: string; buffer_before_minutes: number; buffer_after_minutes: number; status: string }
@@ -124,10 +125,11 @@ export async function ProductionClubOperationsScreen({ organisationId, section, 
     return <div className="space-y-5"><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Create team</h2>{seasonOptions.length && ageOptions.length ? <form action={createTeam} className="mt-5 grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Team name" name="name"/><label className="text-sm font-semibold">Season<select name="seasonId" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{seasonOptions.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select></label><label className="text-sm font-semibold">Age group<select name="ageGroupId" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{ageOptions.map((age) => <option key={age.id} value={age.id}>{age.name}</option>)}</select></label><Button type="submit" className="sm:w-fit">Create team</Button></form> : <p className="mt-4 text-sm text-muted">Create at least one season and age group to enable team creation.</p>}</section><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Add age group</h2><form action={createAgeGroup} className="mt-5 grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Name" name="name"/><Field label="Minimum age" name="minimumAge" type="number"/><Field label="Maximum age" name="maximumAge" type="number"/><Button type="submit" className="sm:w-fit">Add age group</Button></form></section><OperationalForm title="Saved teams" rows={(teams ?? []) as Array<Record<string, unknown>>}><p className="text-sm text-muted">Teams are scoped to a season and age group and protected by organisation permissions.</p></OperationalForm></div>;
   }
 
+  // Shared with the coach's own people screen. A club administrator sees every
+  // team here because RLS gives them organisation scope; a coach sees only the
+  // teams they staff. The panel itself needs no branch for the difference.
   if (section === "people") {
-    const { data, error } = await db.from("players").select("id,first_name,last_name,date_of_birth,status").eq("organisation_id", organisationId).order("last_name").limit(250);
-    if (error) throw new Error("We could not load players.");
-    return <OperationalForm title="Add player" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createPlayer} className="grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="First name" name="firstName"/><Field label="Last name" name="lastName"/><Field label="Date of birth" name="dateOfBirth" type="date"/><Button type="submit" className="sm:w-fit">Add player</Button></form></OperationalForm>;
+    return <TeamPeoplePanel organisationId={organisationId} workspace={workspace}/>;
   }
 
   if (section === "opposition") {
