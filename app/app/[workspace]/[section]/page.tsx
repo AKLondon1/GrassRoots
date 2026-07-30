@@ -27,6 +27,7 @@ import { ParentCoreFootballScreen } from "@/features/screens/parent/core-footbal
 import { ClubOperationsScreen } from "@/features/screens/club/operations";
 import { ProductionClubOperationsScreen, ProductionSupportOperationsScreen } from "@/features/screens/club/production-operations";
 import { ProductionCoachingScopeSelector, ProductionCoachingScreen, ProductionParentDevelopmentScreen } from "@/features/screens/coach/production-coaching";
+import { ProductionComposeScreen } from "@/features/screens/coach/production-compose";
 import { ParentAccountScreen } from "@/features/screens/parent/account";
 import { ProductionParentCoreFootballScreen } from "@/features/screens/parent/production-core-football";
 import { ClubGovernanceScreen } from "@/features/screens/club/governance";
@@ -174,6 +175,11 @@ export default async function WorkspaceSectionPage({
     screenContent = <ProductionClubOperationsScreen organisationId={organisationId} section={section} workspace={workspace} cursor={cursor} />;
   } else if (environment.dataMode !== "demo" && isPlatformSupportSection && organisationId) {
     screenContent = <ProductionSupportOperationsScreen organisationId={organisationId} workspace={workspace} readRequest={{ sessionId: query.supportSessionId, resourceType: query.resourceType, resourceId: query.resourceId }} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && section === "compose" && organisationId) {
+    // Above the Phase 4 branch on purpose. `compose` is in phase4CoachSections too,
+    // so ordering these the other way round would render the coaching screen and the
+    // composer would never be reached.
+    screenContent = <ProductionComposeScreen organisationId={organisationId} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && phase4CoachSections.has(section) && organisationId) {
     const coachingSelection = { teamId: query.teamId, matchId: query.matchId, sessionId: query.sessionId };
     // `players` is already where a coach goes to look at their squad, so adding

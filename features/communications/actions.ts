@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { requireCapability } from "@/features/tenancy/authorise";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const baseSchema = z.object({ organisationId: z.string().uuid(), workspace: z.string().min(1) });
@@ -55,14 +56,49 @@ export async function createAdultConversation(formData: FormData) {
   revalidatePath(`/app/${input.workspace}/communications`);
 }
 
+/**
+ * Publish an announcement, club-wide or to a single team.
+ *
+ * `teamId` decides which authority is required, matching migration 0029: a blank
+ * team addresses every adult in the club and needs organisation-scoped
+ * `announcements:manage`, while a team addresses that team alone, which a coach or
+ * manager holds through their team assignment. Until 0029 the RPC demanded
+ * organisation-scoped `messages:manage` whatever the scope, so a coach publishing
+ * anything at all raised 42501.
+ *
+ * THE EMPTY STRING IS THE COMMON CASE, not the absent field. The composer renders a
+ * team select whose blank option means club-wide, so `teamId` arrives as `""`.
+ * `Object.fromEntries` keeps it, `z.string().uuid()` rejects it and `.nullish()`
+ * alone does not admit it, so the union carries it explicitly and it is normalised
+ * to null before the RPC is called. The governance composer renders no such field,
+ * so undefined has to keep working too.
+ */
 export async function publishAnnouncement(formData: FormData) {
-  const input = baseSchema.extend({ title: z.string().trim().min(2).max(160), body: z.string().trim().min(1).max(10_000) }).parse(Object.fromEntries(formData));
+  const input = baseSchema.extend({
+    title: z.string().trim().min(2).max(160),
+    body: z.string().trim().min(1).max(10_000),
+    teamId: z.union([z.string().uuid(), z.literal("")]).nullish(),
+  }).parse(Object.fromEntries(formData));
+  const teamId = input.teamId ? input.teamId : null;
+  // Defence in depth, per the standing rule: never authorise from the `capabilities`
+  // array. The scope mirrors the RPC's own branch, so a form offering a team the
+  // caller does not staff is refused here with a readable message rather than
+  // reaching the database and coming back as a bare 42501.
+  const access = await requireCapability(
+    input.workspace,
+    "announcements:manage",
+    teamId ? { kind: "team", teamId } : { kind: "organisation" },
+  );
+  if (access.organisationId !== input.organisationId) {
+    throw new Error("That organisation does not belong to this workspace.");
+  }
   const client = await createServerSupabaseClient();
   if (!client) throw new Error("Sign in to publish an announcement.");
   const db = client as unknown as SupabaseClient;
-  const { error } = await db.rpc("publish_announcement", { requested_organisation_id: input.organisationId, requested_title: input.title, requested_body: input.body, requested_team_id: null });
+  const { error } = await db.rpc("publish_announcement", { requested_organisation_id: input.organisationId, requested_title: input.title, requested_body: input.body, requested_team_id: teamId });
   if (error) throw new Error(error.message);
   revalidatePath(`/app/${input.workspace}/communications`);
+  revalidatePath(`/app/${input.workspace}/compose`);
 }
 
 export async function resolveConversationReport(formData: FormData) {

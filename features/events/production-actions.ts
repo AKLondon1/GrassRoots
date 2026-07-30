@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { requireCapability } from "@/features/tenancy/authorise";
+import { grantsCapability, requireCapability } from "@/features/tenancy/authorise";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -115,6 +115,94 @@ async function recordChange(
     summary: entries,
   });
   if (error) throw new Error("The change could not be recorded for families.");
+}
+
+const CHANGE_LABELS: Record<string, string> = {
+  location: "Location",
+  startsAt: "Start time",
+};
+
+function readableChange(entry: ChangeEntry): string {
+  const label = CHANGE_LABELS[entry.field] ?? entry.field;
+  const format = (value: string | null) => {
+    if (!value) return "not set";
+    if (entry.field !== "startsAt") return value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleString("en-GB", {
+          weekday: "short",
+          day: "numeric",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  };
+  return `${label}: ${format(entry.from)} → ${format(entry.to)}`;
+}
+
+/**
+ * Tell the team their event moved.
+ *
+ * Through the same RPC the composer uses, team-scoped to the event's team, rather
+ * than an insert into `announcements`. publish_announcement sets
+ * `authored_by_membership_id` from auth.uid() (0006_comms_finance.sql:179) and is
+ * where the capability check lives, so a direct insert would have to duplicate the
+ * first and would bypass the second. The recipient fan-out is then the database's
+ * job: enqueue_published_announcement_deliveries (0008_release_hardening.sql:516)
+ * branches on team_id and resolves the audience through team_audience_members.
+ *
+ * SKIPPED, NOT ATTEMPTED, when the author cannot publish to this team.
+ * `events:manage` and `announcements:manage` travel together in the standard role
+ * model (0020_role_model.sql:46), but they are separate permissions and a club may
+ * hold them apart. The event has already moved by the time this runs — the two
+ * writes are not one transaction — so calling anyway and being refused would report
+ * a failure for a reschedule that succeeded.
+ *
+ * `event_change_summaries` remains the record of what changed and is written either
+ * way. This is the notification, not the record, which is why a club that has
+ * separated the permissions still gets the parent-facing "What changed" panel.
+ */
+async function announceChange(
+  db: SupabaseClient,
+  access: Awaited<ReturnType<typeof requireCapability>>,
+  input: { organisationId: string; teamId: string; eventInstanceId: string },
+  entries: readonly ChangeEntry[],
+): Promise<void> {
+  if (!entries.length) return;
+  if (!grantsCapability(access, "announcements:manage", { kind: "team", teamId: input.teamId })) {
+    return;
+  }
+
+  const { data: instance } = await db
+    .from("event_instances")
+    .select("event_id")
+    .eq("organisation_id", input.organisationId)
+    .eq("id", input.eventInstanceId)
+    .maybeSingle();
+  const { data: event } = instance?.event_id
+    ? await db
+        .from("events")
+        .select("title")
+        .eq("organisation_id", input.organisationId)
+        .eq("id", String(instance.event_id))
+        .maybeSingle()
+    : { data: null };
+  const title = event?.title ? String(event.title) : "a team event";
+
+  const { error } = await db.rpc("publish_announcement", {
+    requested_organisation_id: input.organisationId,
+    requested_title: `Change to ${title}`.slice(0, 160),
+    requested_body: [`${title} has changed.`, ...entries.map(readableChange)].join("\n"),
+    requested_team_id: input.teamId,
+  });
+  // Deliberately not swallowed. The event moved and the change was recorded, so the
+  // message says both, rather than implying the reschedule failed.
+  if (error) {
+    throw new Error(
+      "The event was moved and recorded, but the team could not be notified. Tell them another way.",
+    );
+  }
 }
 
 interface EventTriple {
@@ -374,6 +462,8 @@ export async function rescheduleEventInstance(formData: FormData): Promise<void>
     entries.push({ field: "startsAt", from: input.previousStartsAt, to: input.startsAt });
   }
   await recordChange(db, input, access.membershipId, entries);
+  await announceChange(db, access, input, entries);
 
   refreshSchedule(input.workspace);
+  revalidatePath(`/app/${input.workspace}/announcements`);
 }

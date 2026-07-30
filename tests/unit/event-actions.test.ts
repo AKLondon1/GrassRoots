@@ -8,9 +8,16 @@ const cache = vi.hoisted(() => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: supabase.createClient,
 }));
-vi.mock("@/features/tenancy/authorise", () => ({
-  requireCapability: tenancy.requireCapability,
-}));
+// `requireCapability` is replaced; `grantsCapability` is not. rescheduleEventInstance
+// consults the real one to decide whether to announce the change, and the fake access
+// below carries no grants, so the notice is skipped and these assertions stay about
+// the change record rather than the announcement.
+vi.mock("@/features/tenancy/authorise", async () => {
+  const actual = await vi.importActual<typeof import("@/features/tenancy/authorise")>(
+    "@/features/tenancy/authorise",
+  );
+  return { ...actual, requireCapability: tenancy.requireCapability };
+});
 vi.mock("next/cache", () => ({ revalidatePath: cache.revalidatePath }));
 
 import {
@@ -122,6 +129,32 @@ function allowAccess(organisationId = ORGANISATION) {
     roles: ["coach"],
     capabilities: [],
     scopedGrants: [],
+  });
+}
+
+/**
+ * The same coach, now holding `announcements:manage` over the team as the standard
+ * role model grants it (0020_role_model.sql:46). The real `grantsCapability` reads
+ * this list, so the branch under test is the shipped one.
+ */
+function announcementsGrantedOverTeam(organisationId = ORGANISATION) {
+  tenancy.requireCapability.mockResolvedValue({
+    status: "allowed",
+    organisationId,
+    membershipId: MEMBERSHIP,
+    role: "coach",
+    roles: ["coach"],
+    capabilities: [],
+    scopedGrants: [
+      {
+        organisationId,
+        scopeKind: "team",
+        scopeId: TEAM,
+        resourceType: null,
+        role: "coach",
+        capabilities: ["announcements:manage"],
+      },
+    ],
   });
 }
 
@@ -289,6 +322,53 @@ describe("rescheduleEventInstance", () => {
     );
 
     expect(database.insertedTables()).not.toContain("event_change_summaries");
+  });
+
+  it("does not announce a change to a team the author cannot publish to", async () => {
+    // The default access carries no grants at all. events:manage and
+    // announcements:manage are separate permissions, and the event has already moved
+    // by the time the notice is attempted, so a club holding them apart must get the
+    // reschedule and the change record without an error.
+    const database = createDatabaseStub();
+    supabase.createClient.mockResolvedValue(database.client);
+
+    await rescheduleEventInstance(formDataOf(validReschedule));
+
+    expect(database.rpcNames()).not.toContain("publish_announcement");
+    expect(database.insertedTables()).toContain("event_change_summaries");
+  });
+
+  it("announces the change to the event's own team when the author may publish", async () => {
+    announcementsGrantedOverTeam();
+    const database = createDatabaseStub();
+    supabase.createClient.mockResolvedValue(database.client);
+
+    await rescheduleEventInstance(formDataOf(validReschedule));
+
+    const call = database.rpc("publish_announcement");
+    // Team-scoped, never club-wide. A null here would fan the notice out to every
+    // adult in the club through enqueue_published_announcement_deliveries.
+    expect(call.requested_team_id).toBe(TEAM);
+    expect(String(call.requested_body)).toContain("Pitch 2");
+    expect(String(call.requested_body)).toContain("Main pitch");
+  });
+
+  it("sends no notice when nothing moved", async () => {
+    announcementsGrantedOverTeam();
+    const database = createDatabaseStub();
+    supabase.createClient.mockResolvedValue(database.client);
+
+    await rescheduleEventInstance(
+      formDataOf({
+        ...validReschedule,
+        startsAt: "2026-08-09T09:00",
+        previousStartsAt: "2026-08-09T09:00",
+        locationName: "Pitch 2",
+        previousLocationName: "Pitch 2",
+      }),
+    );
+
+    expect(database.rpcNames()).not.toContain("publish_announcement");
   });
 });
 
