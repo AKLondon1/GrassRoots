@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(40);
+select plan(43);
 
 -- Runs the given statements in order inside a subtransaction that ALWAYS rolls
 -- back, and reports what happened as a SQLSTATE: '00000' when every statement
@@ -983,6 +983,96 @@ select is(
    where guardian.email = 'robin.fair@example.test'),
   1::bigint,
   'a repeated call leaves exactly one permission row'
+);
+
+-- ===========================================================================
+-- Task 9: the idempotency key must identify the child, not just the event.
+--
+-- availability_responses is unique on (organisation_id, idempotency_key) as well
+-- as on (organisation_id, event_instance_id, player_id). The production action
+-- currently sends `app:<random uuid>`, so every resubmission mints a new key and
+-- the uniqueness is decorative. Replacing it with a deterministic key makes a
+-- double submission idempotent, but only if the key includes the player: a key
+-- built from the event alone silently blocks the second child in a family.
+--
+-- Asserted as superuser: the unique constraint is under test, not a policy.
+-- The `validate_event_child_team_scope` trigger from 0009 still applies, so both
+-- players must be on the event's team and linked to the guardian named. Jamie
+-- Morgan (...0601, guardian ...0401) and Rowan Taylor (...0603, guardian ...0403)
+-- both play for team ...0802.
+-- ===========================================================================
+
+-- Task 9 assertion A: two children on the same team replying to the same event
+-- collide when the key is derived from the event alone. In a two-child family
+-- this silently loses the second reply, which is the bug the player-scoped key
+-- avoids.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601',
+        '00000000-0000-4000-8000-000000000401', 'available',
+        'avail:00000000-0000-4000-8000-000000001208'
+      )$$,
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603',
+        '00000000-0000-4000-8000-000000000403', 'available',
+        'avail:00000000-0000-4000-8000-000000001208'
+      )$$
+  ]),
+  '23505',
+  'an idempotency key built from the event alone blocks a sibling reply'
+);
+
+-- Task 9 assertion B: including the player separates them. This is the exact key
+-- shape the action builds, at 79 characters, inside the 8 to 120 bound.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601',
+        '00000000-0000-4000-8000-000000000401', 'available',
+        'avail:00000000-0000-4000-8000-000000001208:00000000-0000-4000-8000-000000000601'
+      )$$,
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603',
+        '00000000-0000-4000-8000-000000000403', 'available',
+        'avail:00000000-0000-4000-8000-000000001208:00000000-0000-4000-8000-000000000603'
+      )$$
+  ]),
+  '00000',
+  'a player-scoped idempotency key lets both children in a family reply'
+);
+
+-- Task 9 assertion C: the lower bound is real, so the key format cannot be
+-- shortened to something like a bare status without failing here first.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601',
+        '00000000-0000-4000-8000-000000000401', 'available', 'short'
+      )$$
+  ]),
+  '23514',
+  'an idempotency key below eight characters is rejected'
 );
 
 select * from finish();
