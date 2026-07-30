@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Status } from "@/components/ui/status";
 import { saveProductionAvailability } from "@/features/availability/actions";
-import { saveProductionPollResponse } from "@/features/polls/actions";
 import { ChildSelector } from "@/features/screens/parent/child-selector";
 import { loadLinkedChildren, selectLinkedChild } from "@/features/screens/parent/linked-children";
+import { PollsSection } from "@/features/screens/parent/sections/polls";
 import {
   card,
   EventPanel,
@@ -15,9 +15,7 @@ import {
   formatDate,
   formatDateTime,
   formatTime,
-  relation,
   type EventRow,
-  type NamedRelation,
   type SectionContext,
 } from "@/features/screens/parent/sections/shared";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -43,10 +41,6 @@ interface AvailabilityRow {
   note: string | null;
   updated_at: string;
 }
-interface PollRow { id: string; team_id: string; title: string; status: string; closes_at: string }
-interface PollOptionRow { id: string; poll_id: string; starts_at: string; ends_at: string; pitch_capacity: number | null }
-interface PollRespondentRow { id: string; poll_id: string; player_id: string | null; players: NamedRelation }
-interface PollResponseRow { option_id: string; respondent_id: string; response: "available" | "unavailable" | "maybe" }
 interface SquadRow { id: string; event_instance_id: string; team_id: string; status: string; published_at: string | null }
 interface SquadMemberRow { squad_id: string; player_id: string; status: "selected" | "standby" | "withdrawn" }
 interface AnnouncementRow { id: string; title: string; body: string; published_at: string }
@@ -156,25 +150,6 @@ async function AvailabilitySection({ db, organisationId, workspace, child, now }
   const responses = (responseData ?? []) as AvailabilityRow[];
   if (!events.length) return <EmptyState title="No availability requests" description={`Upcoming events for ${child.name} will appear here.`} />;
   return <section className="space-y-4" aria-label="Availability requests">{events.map((event) => { const response = responses.find((item) => item.event_instance_id === event.id); return <article className={card} key={event.id}><div className="flex flex-wrap items-center justify-between gap-3"><Status tone={response?.status === "available" ? "success" : response?.status ? "info" : "warning"}>{response?.status ?? "Response needed"}</Status><span className="text-sm font-semibold text-muted">{formatDate(event.starts_at)} · {formatTime(event.starts_at)}</span></div><h2 className="mt-4 text-xl font-semibold">{eventTitle(event)}</h2><p className="mt-2 text-sm text-muted">Response for {child.name}</p><form action={saveProductionAvailability} className="mt-5"><input type="hidden" name="organisationId" value={organisationId} /><input type="hidden" name="eventInstanceId" value={event.id} /><input type="hidden" name="teamId" value={event.team_id} /><input type="hidden" name="playerId" value={child.playerId} /><input type="hidden" name="workspace" value={workspace} /><fieldset className="grid gap-3 sm:grid-cols-3"><legend className="sr-only">Availability for {child.name}</legend>{["available", "unavailable", "unsure"].map((status) => <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border-strong px-3 text-sm font-semibold capitalize has-[:checked]:border-primary has-[:checked]:bg-primary-light" key={status}><input defaultChecked={response?.status === status} name="status" required type="radio" value={status} />{status}</label>)}</fieldset><label className="mt-4 block text-sm font-semibold">Note <span className="font-normal text-muted">(optional)</span><textarea className="mt-2 min-h-20 w-full rounded-xl border border-border-strong bg-background p-3" defaultValue={response?.note ?? ""} maxLength={240} name="note" /></label><Button className="mt-4" type="submit">Save availability</Button></form></article>; })}</section>;
-}
-
-async function PollsSection({ db, organisationId, workspace, child, now }: SectionContext) {
-  const { data, error } = await db.from("polls").select("id,team_id,title,status,closes_at").eq("organisation_id", organisationId).in("team_id", child.teamIds).eq("status", "open").gte("closes_at", now).order("closes_at").limit(20);
-  if (error) throw new Error("We could not load open time polls.");
-  const polls = (data ?? []) as PollRow[];
-  const pollIds = polls.map((poll) => poll.id);
-  const [{ data: optionData, error: optionError }, { data: respondentData, error: respondentError }] = polls.length ? await Promise.all([
-    db.from("poll_options").select("id,poll_id,starts_at,ends_at,pitch_capacity").eq("organisation_id", organisationId).in("poll_id", pollIds).order("starts_at"),
-    db.from("poll_respondents").select("id,poll_id,player_id,players(first_name,last_name)").eq("organisation_id", organisationId).eq("player_id", child.playerId).in("poll_id", pollIds),
-  ]) : [{ data: [], error: null }, { data: [], error: null }];
-  if (optionError || respondentError) throw new Error("We could not load poll choices for linked players.");
-  const options = (optionData ?? []) as PollOptionRow[];
-  const respondents = (respondentData ?? []) as PollRespondentRow[];
-  const { data: pollResponseData, error: pollResponseError } = respondents.length ? await db.from("poll_responses").select("option_id,respondent_id,response").eq("organisation_id", organisationId).in("respondent_id", respondents.map((respondent) => respondent.id)) : { data: [], error: null };
-  if (pollResponseError) throw new Error("We could not load your current poll responses.");
-  const pollResponses = (pollResponseData ?? []) as PollResponseRow[];
-  if (!polls.length) return <EmptyState title="No open time polls" description="Coach-published choices for your linked teams will appear here until their closing time." />;
-  return <section className="space-y-4" aria-label="Open time polls">{polls.map((poll) => { const pollRespondents = respondents.filter((respondent) => respondent.poll_id === poll.id); return <article className={card} key={poll.id}><div className="flex flex-wrap items-center justify-between gap-3"><Status tone="info">Open poll</Status><span className="text-sm text-muted">Closes {formatDate(poll.closes_at)} at {formatTime(poll.closes_at)}</span></div><h2 className="mt-4 text-xl font-semibold">{poll.title}</h2>{pollRespondents.length ? <div className="mt-5 space-y-6">{pollRespondents.map((respondent) => <section key={respondent.id} aria-label={`Responses for ${relation(respondent.players).first_name ?? child.firstName}`}><h3 className="font-semibold">{child.name}</h3><div className="mt-3 divide-y divide-border">{options.filter((option) => option.poll_id === poll.id).map((option) => { const current = pollResponses.find((response) => response.respondent_id === respondent.id && response.option_id === option.id)?.response; return <form action={saveProductionPollResponse} className="py-4" key={option.id}><input type="hidden" name="organisationId" value={organisationId} /><input type="hidden" name="pollId" value={poll.id} /><input type="hidden" name="optionId" value={option.id} /><input type="hidden" name="respondentId" value={respondent.id} /><input type="hidden" name="workspace" value={workspace} /><p className="font-medium">{formatDate(option.starts_at)} · {formatTime(option.starts_at)}–{formatTime(option.ends_at)}</p><p className="mt-1 text-xs text-muted">{option.pitch_capacity ? `Pitch capacity ${option.pitch_capacity}` : "Capacity not set"}</p><fieldset className="mt-3 flex flex-wrap gap-2"><legend className="sr-only">Response for this time</legend>{["available", "unavailable", "maybe"].map((response) => <label className="flex min-h-10 items-center gap-2 rounded-xl border border-border-strong px-3 text-sm font-semibold capitalize has-[:checked]:border-primary has-[:checked]:bg-primary-light" key={response}><input defaultChecked={current === response} name="response" required type="radio" value={response} />{response}</label>)}</fieldset><Button className="mt-3" size="small" type="submit">Save this time</Button></form>; })}</div></section>)}</div> : <p className="mt-5 rounded-xl bg-surface px-4 py-3 text-sm text-muted">No response has been assigned to {child.firstName} for this poll yet. Contact the organiser if they should be included.</p>}</article>; })}</section>;
 }
 
 async function SquadSection({ db, organisationId, child }: SectionContext) {

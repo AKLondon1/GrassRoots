@@ -84,3 +84,68 @@ export async function assertLinkedToPlayer(
   if (error) throw new Error("We could not check your link to this player.");
   if (!link) throw new Error("You are not linked to this player.");
 }
+
+/**
+ * Refuse unless this poll respondent is one this guardian may answer for.
+ *
+ * NOT the availability pattern, and applying that one verbatim breaks half the
+ * legitimate cases. `poll_responses.respondent_id` references `poll_respondents`,
+ * not a player and not a guardian, and that row carries `player_id` XOR
+ * `membership_id`, enforced by a check constraint. A poll can therefore ask a
+ * question of a child (`player_id`) or of an adult directly (`membership_id`), and
+ * the membership case has no player to walk the guardian link through. Running the
+ * membership to guardian to player_guardians chain over it rejects every adult
+ * respondent, which are exactly the rows a "can you help at the tournament?" poll
+ * creates.
+ *
+ * So the question splits on which column is set:
+ *
+ *   membership_id  accept only if it is this caller's own membership
+ *   player_id      accept only if this guardian is linked to that child
+ *
+ * WHY THE NOT-FOUND MESSAGE IS HEDGED. Reading `poll_respondents` is itself gated by
+ * can_access_poll_respondent, which requires the poll to be open. A row therefore
+ * goes missing for two quite different reasons: it belongs to another family, or the
+ * deadline passed while the form sat on screen. The second is ordinary and blameless,
+ * so the sentence a parent reads must not accuse them of the first.
+ *
+ * Defence in depth rather than the only guard. RLS already refuses a respondent
+ * belonging to another family. This turns that refusal into something a person can
+ * act on, and it fails closed if the policy is ever relaxed.
+ */
+export async function assertOwnsPollRespondent(
+  db: SupabaseClient,
+  organisationId: string,
+  actor: ActingGuardian,
+  pollId: string,
+  respondentId: string,
+): Promise<void> {
+  const { data, error } = await db
+    .from("poll_respondents")
+    .select("player_id,membership_id")
+    .eq("organisation_id", organisationId)
+    .eq("poll_id", pollId)
+    .eq("id", respondentId)
+    .maybeSingle();
+  if (error) throw new Error("We could not check who this poll response belongs to.");
+  if (!data) {
+    throw new Error("This poll response could not be matched to your family. The poll may have closed.");
+  }
+
+  const respondent = data as { player_id: string | null; membership_id: string | null };
+
+  if (respondent.membership_id) {
+    if (respondent.membership_id !== actor.membershipId) {
+      throw new Error("This poll response belongs to someone else.");
+    }
+    return;
+  }
+
+  if (!respondent.player_id) {
+    // The xor check constraint makes this unreachable. Refusing rather than assuming
+    // costs nothing and means a future schema change cannot open a hole silently.
+    throw new Error("This poll response is not attributed to anyone.");
+  }
+
+  await assertLinkedToPlayer(db, organisationId, actor.guardianId, respondent.player_id);
+}
