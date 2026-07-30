@@ -1,13 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Status } from "@/components/ui/status";
-import { saveProductionAvailability } from "@/features/availability/actions";
 import { ChildSelector } from "@/features/screens/parent/child-selector";
 import { loadLinkedChildren, selectLinkedChild } from "@/features/screens/parent/linked-children";
 import { ActionsSection } from "@/features/screens/parent/sections/actions";
 import { AnnouncementsSection } from "@/features/screens/parent/sections/announcements";
+import { AvailabilitySection } from "@/features/screens/parent/sections/availability";
 import { EventSection } from "@/features/screens/parent/sections/event";
 import { HomeSection } from "@/features/screens/parent/sections/home";
 import { PollsSection } from "@/features/screens/parent/sections/polls";
@@ -15,10 +14,7 @@ import {
   card,
   EventPanel,
   eventColumns,
-  eventTitle,
-  formatDate,
   formatDateTime,
-  formatTime,
   type EventRow,
   type SectionContext,
 } from "@/features/screens/parent/sections/shared";
@@ -38,13 +34,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * `.in("team_id", child.teamIds)`. Equality would silently drop half a child's fixtures.
  */
 
-interface AvailabilityRow {
-  event_instance_id: string;
-  player_id: string;
-  status: "available" | "unavailable" | "unsure";
-  note: string | null;
-  updated_at: string;
-}
 interface SquadRow { id: string; event_instance_id: string; team_id: string; status: string; published_at: string | null }
 interface SquadMemberRow { squad_id: string; player_id: string; status: "selected" | "standby" | "withdrawn" }
 
@@ -119,22 +108,6 @@ async function ScheduleSection(section: string, { db, organisationId, child, now
   const events = (eventData ?? []) as EventRow[];
   if (!events.length) return <EmptyState title="No linked activity yet" description={`Upcoming events for ${child.firstName} will appear here.`} />;
   return <section className="space-y-4" aria-label={section === "actions" ? "Upcoming actions" : "Upcoming schedule"}>{events.map((event) => <EventPanel event={event} key={event.id} />)}</section>;
-}
-
-async function AvailabilitySection({ db, organisationId, workspace, child, now }: SectionContext) {
-  const { data: eventData, error: eventError } = await db.from("event_instances").select(eventColumns).eq("organisation_id", organisationId).in("team_id", child.teamIds).eq("status", "scheduled").gte("ends_at", now).order("starts_at").limit(25);
-  if (eventError) throw new Error("We could not load linked availability.");
-  const events = (eventData ?? []) as EventRow[];
-  const eventIds = events.map((event) => event.id);
-  // Scoped to this child rather than every active player in the organisation. The old
-  // query read `team_memberships` by organisation and leaned on RLS to narrow it.
-  const { data: responseData, error: responseError } = eventIds.length
-    ? await db.from("availability_responses").select("event_instance_id,player_id,status,note,updated_at").eq("organisation_id", organisationId).eq("player_id", child.playerId).in("event_instance_id", eventIds)
-    : { data: [], error: null };
-  if (responseError) throw new Error("We could not load current availability responses.");
-  const responses = (responseData ?? []) as AvailabilityRow[];
-  if (!events.length) return <EmptyState title="No availability requests" description={`Upcoming events for ${child.name} will appear here.`} />;
-  return <section className="space-y-4" aria-label="Availability requests">{events.map((event) => { const response = responses.find((item) => item.event_instance_id === event.id); return <article className={card} key={event.id}><div className="flex flex-wrap items-center justify-between gap-3"><Status tone={response?.status === "available" ? "success" : response?.status ? "info" : "warning"}>{response?.status ?? "Response needed"}</Status><span className="text-sm font-semibold text-muted">{formatDate(event.starts_at)} · {formatTime(event.starts_at)}</span></div><h2 className="mt-4 text-xl font-semibold">{eventTitle(event)}</h2><p className="mt-2 text-sm text-muted">Response for {child.name}</p><form action={saveProductionAvailability} className="mt-5"><input type="hidden" name="organisationId" value={organisationId} /><input type="hidden" name="eventInstanceId" value={event.id} /><input type="hidden" name="teamId" value={event.team_id} /><input type="hidden" name="playerId" value={child.playerId} /><input type="hidden" name="workspace" value={workspace} /><fieldset className="grid gap-3 sm:grid-cols-3"><legend className="sr-only">Availability for {child.name}</legend>{["available", "unavailable", "unsure"].map((status) => <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border-strong px-3 text-sm font-semibold capitalize has-[:checked]:border-primary has-[:checked]:bg-primary-light" key={status}><input defaultChecked={response?.status === status} name="status" required type="radio" value={status} />{status}</label>)}</fieldset><label className="mt-4 block text-sm font-semibold">Note <span className="font-normal text-muted">(optional)</span><textarea className="mt-2 min-h-20 w-full rounded-xl border border-border-strong bg-background p-3" defaultValue={response?.note ?? ""} maxLength={240} name="note" /></label><Button className="mt-4" type="submit">Save availability</Button></form></article>; })}</section>;
 }
 
 async function SquadSection({ db, organisationId, child }: SectionContext) {
