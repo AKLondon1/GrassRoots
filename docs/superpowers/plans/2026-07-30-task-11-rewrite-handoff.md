@@ -1,11 +1,32 @@
 # Task 11 handoff: the parent journey rewrite
 
+> ## STATUS: COMPLETE at `ef64f8a`
+>
+> Task 11 is finished. All eight sections are ported and live in
+> `features/screens/parent/sections/`, and `production-core-football.tsx` is dispatch
+> only. **Sections 2, 3, 4 and 6 below describe work that is now done** and are kept
+> for the reasoning, not as instructions.
+>
+> **Verification at `ef64f8a`:** 489 pgTAP across 13 files, 519 vitest across 105
+> files, typecheck clean, `npm run lint` clean repo-wide.
+>
+> **What is genuinely outstanding** is in section 9 at the end. Read that and section
+> 5 first; treat everything between as history.
+
 **Written 2026-07-30**, after the Task 11 foundation and migrations 0027 and 0028
 shipped. Read this, then `2026-07-30-phase-1-handoff.md` for anything it does not
 cover. Where they disagree, **this document wins** for Task 11 specifically.
 
 Everything below was verified against the running database in the session that wrote
 it. Nothing here is inferred from the plan.
+
+**Marking convention, learned the hard way.** Two claims in the first version of this
+document were wrong, and both were among its most specific: a named column and a
+named seed row. The lesson is not to write vaguer handoffs. It is that "I ran this
+and saw it" and "the plan says so" are different kinds of statement, and prose
+flattens them into one confident register. Anything asserted about the schema from
+here on either cites the file and line it was read from, or says plainly that it was
+inherited and unchecked.
 
 ---
 
@@ -105,9 +126,14 @@ Both helpers are in `features/screens/parent/linked-children.ts`, committed and 
 
 ---
 
-## 4. The polls trap, which is still open
+## 4. The polls trap ✅ HANDLED at `f798b90`
 
-**Not yet handled. This is the first thing to get right.**
+**Done.** `sections/polls.tsx` drops the deadline filter, renders a closed poll as
+closed, and fetches options and respondents only for polls still open.
+`isStillOpen` mirrors `can_access_poll_respondent` exactly and compares instants
+rather than strings. `assertOwnsPollRespondent` closes the `respondentId` hole, with
+five assertions in `tests/security/poll-attribution.test.ts`. The description below
+is why, kept for the reasoning.
 
 A poll can be **visible while its respondent rows are not**:
 
@@ -193,6 +219,58 @@ authorise a write from the `capabilities` array; use `requireCapability` from
 `organisationId` against the resolved one. Write-refusal assertions are INSERTs, since
 RLS filters an UPDATE rather than refusing it. Assert the exact SQLSTATE via
 `probe_sqlstate`. One task at a time, stop for approval between tasks.
+
+---
+
+## 9. What is actually outstanding
+
+Everything above section 5 is history. This is the live list.
+
+### The private calendar feed, deliberately not built
+
+`schedule` renders the agenda but carries **no "Private calendar feed" link**, and
+that is a decision rather than an omission.
+
+The original Phase 1 handoff said this section should show a "real token from
+`private_calendar_tokens`". It cannot. That table stores `token_digest` and nothing
+else (`0003_events_polls_squads.sql:339`, constrained to `^[0-9a-f]{64}$`), the
+plaintext is never persisted, and the seeded digest is sixty-four `b` characters that
+hash nothing. **There is no token to read, only a token to issue.**
+
+Issuing one is the magic-link pattern already used for availability:
+
+- generate a secret, hash it with `digestOneTimeToken` (`lib/security/one-time-token.ts`)
+- insert `organisation_id`, `membership_id`, `token_digest`, `label` into `private_calendar_tokens`
+- return the plaintext **exactly once**, which means an API route plus a client
+  component, because a server component can never show it again
+
+`app/api/availability/magic-links/route.ts` and
+`components/availability/magic-link-issuer.tsx` are the working precedent. Before
+building it, check whether a guardian can INSERT into `private_calendar_tokens` at
+all: `role_read_access.sql` asserts the read, not the write, and that is exactly the
+gap that produced migrations 0023 to 0026.
+
+A link producing a broken feed would be worse than no link, because a parent would
+trust it and stop checking the app.
+
+### Marking an announcement read
+
+`sections/announcements.tsx` shows New/Read from `announcement_recipients.read_at`
+but cannot set it. The demo's "Mark as read in preview" button was removed with its
+`DemoFeedback` block. Setting `read_at` is a write path and belongs with the
+notification work, not smuggled into a port.
+
+### Still true from before
+
+Migrations **0023 to 0028 are undeployed**; production is at 0022. Deploy as one
+batch at Task 13, after a browser pass. Do not cherry-pick — the CLI applies
+migrations in filename order and skipping any desynchronises
+`supabase_migrations.schema_migrations`.
+
+Nothing in Task 11 has been seen in a browser. That remains the largest carried risk
+and is what Task 13 exists for.
+
+`gh` is installed **and authenticated** as `AKLondon1`.
 
 ---
 
