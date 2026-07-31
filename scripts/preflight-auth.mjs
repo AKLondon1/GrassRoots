@@ -145,6 +145,13 @@ check(
 // one and the CLI schema has no such key. This is the substitute, and it is stronger than a
 // toggle would have been, because it fails the build rather than sitting in a dashboard.
 
+// This file names the methods it forbids, so it matches its own search. Excluding the
+// scanner's own source is not a loophole: this is where the pattern is defined, and the
+// same exclusion exists for the same reason in tests/unit/no-committed-credentials.test.ts.
+// Excluding any OTHER file would be a loophole, which is why this is a single exact path
+// rather than a list somebody can grow.
+const SELF = "scripts/preflight-auth.mjs";
+
 let passwordCallSites = "";
 try {
   passwordCallSites = execFileSync(
@@ -156,6 +163,11 @@ try {
   // git grep exits 1 when there are no matches, which is the passing case.
   passwordCallSites = "";
 }
+
+passwordCallSites = passwordCallSites
+  .split("\n")
+  .filter((path) => path !== "" && path !== SELF)
+  .join("\n");
 
 check(
   "no tracked source file calls a password sign-in method",

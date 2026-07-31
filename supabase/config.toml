@@ -296,7 +296,11 @@ otp_expiry = 1800
 # who did not request it that ignoring it is safe and sufficient.
 [auth.email.template.magic_link]
 subject = "Your GrassRoots sign-in link"
-content_path = "./templates/magic_link.html"
+# Resolved from the repository root, not from this file's directory. `./templates/...`
+# looks right sitting inside supabase/ and is not: it sends the CLI to <root>/templates,
+# which does not exist, and the whole local stack then refuses to start. The commented
+# invite example below has always had this right.
+content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
