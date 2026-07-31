@@ -22,6 +22,18 @@ const signInSchema = z.object({
     .pipe(z.email("Enter a valid email address.")),
 });
 
+/**
+ * The single response every address gets, whether or not it has an account.
+ *
+ * Shared as one constant rather than repeated, so the two call sites cannot drift
+ * apart into distinguishable wording. Note it does not claim a link was sent; it
+ * describes what the member should do next, which is true either way.
+ */
+const SENT_RESPONSE = {
+  status: "success",
+  message: "If that address has an account, a sign-in link is on its way.",
+} as const satisfies MagicLinkState;
+
 export interface MagicLinkState {
   status: "idle" | "error" | "success";
   message?: string;
@@ -85,27 +97,31 @@ export async function requestMagicLinkForMode(
     };
   }
 
-  let result: Awaited<ReturnType<MagicLinkSender>>;
   try {
-    result = await sendMagicLink(parsed.data.email, emailRedirectTo);
+    const result = await sendMagicLink(parsed.data.email, emailRedirectTo);
+    if (result.error) {
+      // DELIBERATELY REPORTED AS SUCCESS. The sender runs with
+      // `shouldCreateUser: false`, so an address with no account comes back here as
+      // an error while a real one does not. Saying so out loud would turn this form
+      // into a way of asking "does this parent have an account at this club", one
+      // address at a time, and the answer is about a named adult attached to a named
+      // child's team.
+      //
+      // The cost is real and accepted: a genuinely broken mail provider now looks
+      // identical to a link that was sent. That is an operational failure and
+      // monitoring the provider is the right place to catch it, not a public form.
+      // The rate limits in submitMagicLink are what stop this being probed in bulk.
+      return SENT_RESPONSE;
+    }
+    return SENT_RESPONSE;
   } catch {
+    // A thrown exception is a configuration or network fault rather than anything
+    // derived from the address, so it leaks nothing and is reported honestly.
     return {
       status: "error",
       message: "We could not send the sign-in link. Try again in a moment.",
     };
   }
-
-  if (result.error) {
-    return {
-      status: "error",
-      message: "We could not send the sign-in link. Try again in a moment.",
-    };
-  }
-
-  return {
-    status: "success",
-    message: "Check your email for your secure sign-in link.",
-  };
 }
 
 export async function submitMagicLink(

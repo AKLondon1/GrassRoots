@@ -749,7 +749,7 @@ Document these account-level actions:
 1. Revoke the previously disclosed Resend key.
 2. In Google Cloud, create a Web application OAuth client.
 3. Set the authorised redirect URI to
-   `https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback`.
+   `https://your-project-ref.supabase.co/auth/v1/callback`.
 4. Add the Google client ID and secret to the Supabase Google provider.
 5. Enable the **Before User Created** hook using
    `public.hook_restrict_beta_signup`, then securely insert the initial owner
@@ -890,7 +890,7 @@ In Google Cloud, create a Web application OAuth client with this exact
 authorised redirect URI:
 
 ```text
-https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback
+https://your-project-ref.supabase.co/auth/v1/callback
 ```
 
 In the Supabase GrassRoots project:
