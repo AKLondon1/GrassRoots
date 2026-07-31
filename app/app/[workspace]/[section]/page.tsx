@@ -46,7 +46,7 @@ export const metadata: Metadata = {
 
 interface WorkspaceSectionPageProps {
   params: Promise<{ section: string; workspace: string }>;
-  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; instance?: string; cursor?: string | string[]; child?: string }>;
+  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; instance?: string; cursor?: string | string[]; child?: string; rollFrom?: string; rollTo?: string }>;
 }
 
 export default async function WorkspaceSectionPage({
@@ -172,7 +172,11 @@ export default async function WorkspaceSectionPage({
   } else if (environment.dataMode !== "demo" && role === "platform" && platformOperationsSections.has(section) && section !== "support") {
     screenContent = <ProductionPlatformOperationsScreen section={section} cursor={cursor} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && isClubOperationsSection && organisationId) {
-    screenContent = <ProductionClubOperationsScreen organisationId={organisationId} section={section} workspace={workspace} cursor={cursor} />;
+    // `rollFrom` and `rollTo` drive the season rollover preview, chosen by a GET
+    // form so that reading what a rollover would do costs nothing and can be redone.
+    // An unrecognised id is dropped by the screen, which checks both against the
+    // organisation's own season list before using either.
+    screenContent = <ProductionClubOperationsScreen organisationId={organisationId} section={section} workspace={workspace} cursor={cursor} rollover={{ from: query.rollFrom, to: query.rollTo }} />;
   } else if (environment.dataMode !== "demo" && isPlatformSupportSection && organisationId) {
     screenContent = <ProductionSupportOperationsScreen organisationId={organisationId} workspace={workspace} readRequest={{ sessionId: query.supportSessionId, resourceType: query.resourceType, resourceId: query.resourceId }} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && section === "compose" && organisationId) {
