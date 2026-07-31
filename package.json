@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "test:db": "npx supabase db reset && npx supabase test db",
     "seed:auth": "node scripts/seed-auth-identities.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run test:db && npm run test:e2e"
+    "preflight:auth": "node scripts/preflight-auth.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run preflight:auth && npm run test && npm run test:db && npm run test:e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
