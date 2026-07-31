@@ -43,28 +43,46 @@ leave half-written rows in a live club's data.
 | Same auth providers configured | Its own storage buckets |
 | Same RLS, same policies | No real club, no real parent, ever |
 
-**[DECISION]** Name it and treat it as permanent: a `staging` Supabase project plus a
-preview deployment. It costs one project and it is the thing that lets you run this
-loop again for Phase 1b without re-litigating any of the above.
+**DECIDED: staging is permanent**, and **[VERIFIED]** it is provisioned in Phase 14
+task 14f rather than here. A standing `staging` Supabase project plus a preview
+deployment. It costs one project and it is what lets this loop run again for Phase 1b
+without re-litigating any of the above.
+
+Which means **task 15a below verifies rather than creates.** If staging does not
+already exist, Phase 14 is not finished and this phase has not started.
 
 If you genuinely want a smoke test against live production later, that is a separate,
 much smaller, read-only exercise. It is not this.
 
 ---
 
-## Task 15a: provision the environment
+## Task 15a: verify the environment Phase 14 built
 
-Stand up the Supabase project and the deployment, once.
+Staging and its Supabase configuration come from **task 14f**. This task confirms what
+that phase left behind and adds only what is specific to running the loop.
 
-- A new Supabase project, separate from production
-- Apply migrations `0023` to `0030` **in filename order, all of them**. The CLI records
-  them in `supabase_migrations.schema_migrations`; cherry-picking desynchronises that
-  ledger against the real schema and breaks every future push. Every pgTAP run has
-  only ever exercised the complete sequence.
-- Deploy the app against it with `NEXT_PUBLIC_DATA_MODE=supabase` and a canonical HTTPS
-  `APP_ORIGIN` matching the deployment. **[VERIFIED]** Both are required by
-  `lib/env.ts:56` and `lib/env.ts:62-67`.
-- Run the Phase 14 identity-seeding script against it.
+Confirm, do not rebuild:
+
+- The staging Supabase project exists and is separate from production
+- Migrations `0023` to `0030` are applied **in filename order, all of them**. The CLI
+  records them in `supabase_migrations.schema_migrations`; cherry-picking
+  desynchronises that ledger against the real schema and breaks every future push.
+  Every pgTAP run has only ever exercised the complete sequence
+- Email provider on, password sign-in off, redirect allowlist exact, SMTP pointed at a
+  catcher — all set in 14f
+- The four identities exist and can sign in **by magic link**, which Phase 14's exit
+  condition already proved by hand
+
+Add here:
+
+- The app deployed against staging with `NEXT_PUBLIC_DATA_MODE=supabase` and a
+  canonical HTTPS `APP_ORIGIN` matching the deployment. **[VERIFIED]** Both are
+  required by `lib/env.ts:56` and `lib/env.ts:62-67`
+- Whatever reset mechanism the loop needs, per the 15b decision
+
+**If any of the above is missing, stop.** Phase 14 is not finished, and running the
+loop against a half-configured environment produces failures that tell you nothing
+about the code.
 
 ---
 

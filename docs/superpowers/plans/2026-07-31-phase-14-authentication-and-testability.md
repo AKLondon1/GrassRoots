@@ -59,22 +59,25 @@ the documentation was wrong.** Do not weaken the guard.
 
 Add a second authentication route so a human, and a test, can get in without Google.
 
-### [DECISION] Which email method
+### DECIDED: magic links only
 
-Three options, and the choice shapes everything downstream:
+**`signInWithOtp` with an email link. No passwords, now or later.**
 
-| Option | Product fit | Testability | Security surface |
-|---|---|---|---|
-| **Magic link / OTP** (`signInWithOtp`) | Good. No passwords for parents to forget | Needs a mailbox to read, or admin `generateLink` | Smallest. No password storage, no reset flow, no credential stuffing |
-| **Password** (`signInWithPassword`) | Familiar, but adds reset, strength rules, breach checks | Trivially deterministic | Largest. You now own password storage policy |
-| **Both** | Choice for users | Best | Sum of both |
+The consequence to hold on to: **this codebase never stores a password**, so it never
+owns a reset flow, a strength policy, a breach-check integration or a credential
+stuffing surface. Every one of those is a thing a small club app would otherwise have
+to get right forever. Supabase owns the token lifecycle instead.
 
-**Recommend magic link / OTP alone.** This is a club app used a few times a week by
-parents; passwords are a liability with no matching benefit, and Supabase handles the
-token lifecycle. It also composes with the existing `/auth/callback` route rather than
-needing a new one.
+Two things follow from the decision:
 
-The testability gap it opens is solved in 14b without weakening production.
+- **Do not add `signInWithPassword` anywhere, including for tests.** The moment it
+  exists for a test it exists for an attacker. 14b solves test authentication without
+  it, and 14f adds a Supabase-side setting that makes the decision enforceable rather
+  than merely intended.
+- **The mail leg is now load-bearing.** If mail does not arrive, nobody signs in at
+  all — there is no fallback route. That raises SMTP from a nice-to-have to part of
+  the auth path, which is why 14f configures it in both environments and why staging
+  is permanent.
 
 ### What to build
 
@@ -235,17 +238,112 @@ proves less than it appears to.
 
 ---
 
+## Task 14f: configure the Supabase projects themselves
+
+Code alone does not enable magic links. The provider is a **project setting**, and
+until it is switched on, `signInWithOtp` returns an error no amount of correct
+TypeScript will fix. This task changes the actual databases.
+
+### DECIDED: staging is permanent
+
+A standing `staging` Supabase project, not a throwaway. Three reasons that hold beyond
+this phase:
+
+- Magic links cannot be proven without real SMTP. Local catchers prove the code path;
+  only a deployed project proves deliverability, link expiry and the redirect
+  allowlist together.
+- Phase 15 loops against it, and Phase 1b will loop against it again. Rebuilding it
+  each time means re-deciding all of this each time.
+- It is the only safe place to rehearse a migration deploy. **[VERIFIED]** Seven
+  migrations, `0023` to `0030`, are still undeployed with production at 0022, and that
+  deploy should happen somewhere reversible first.
+
+Provision it **here**, in 14, not in 15. Phase 15 then verifies rather than creates.
+
+### Tooling: MCP if you have it, dashboard if you do not
+
+**[VERIFIED, 2026-07-31]** No Supabase MCP was connected when this plan was written —
+a tool search returned nothing Supabase-related. Connect one with `claude mcp add` in
+an interactive session if you want an agent to make these changes directly. There is a
+`sparc:supabase-admin` skill in the skill list, but that is a prompt template, not a
+connection to a project.
+
+Either route is fine. What matters is that **every change below is also expressed as
+an assertion in the Phase 15 preflight script**, so a setting changed by hand in a
+dashboard at 11pm cannot silently drift. Configure it however you like; prove it in
+code.
+
+### What to change, in both local and staging
+
+**Auth providers**
+
+- [ ] Email provider **enabled**
+- [ ] "Confirm email" behaviour set so a magic link signs the user in
+- [ ] **Password sign-in disabled at the project level.** This is what turns the
+      "magic links only" decision into something enforced rather than merely
+      documented. If the setting exists, use it
+- [ ] Google provider left exactly as it is — this phase adds a route, it does not
+      replace one
+
+**Redirect and origin**
+
+- [ ] Site URL set to the environment's canonical HTTPS origin
+- [ ] Redirect allowlist contains that origin's `/auth/callback` and **nothing else**.
+      **[VERIFIED]** The app already refuses a mismatched origin
+      (`lib/supabase/oauth.ts:20-27`), but this is the second gate and a wildcard here
+      undoes it
+- [ ] Local project points at `http://localhost:3000`; staging at its real HTTPS origin
+
+**Mail**
+
+- [ ] Staging SMTP points at a **catcher**, never a real sender. Staging will publish
+      test announcements, and **[VERIFIED]**
+      `enqueue_published_announcement_deliveries` (`0008_release_hardening.sql:516`)
+      fans every published announcement out to its whole audience
+- [ ] The magic-link email template says who it is from and what it does. This is the
+      only email a parent gets before they have an account, so it is the one most
+      likely to be read as phishing
+- [ ] Link expiry set deliberately. Long enough for a parent to find the email on a
+      phone, short enough to matter
+
+**Rate limits**
+
+- [ ] Read what the project's OTP rate limits actually are and write them down. 14d
+      asks you to assert this behaviour; you cannot assert a number you have not read
+
+**Migrations**
+
+- [ ] Apply `0023` to `0030` to staging, in filename order, all of them. This is the
+      rehearsal for production
+
+**Keys**
+
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` for staging stored where the 14b seeding script can
+      read it, and in **no** `NEXT_PUBLIC_*` variable
+
+### Test
+
+Extend the credential-scanning static test from 14b to also fail if a Supabase URL or
+key for **any** project appears in a tracked file. Environment names in a document are
+fine; values are not.
+
+---
+
 ## Suggested order
 
 1. Reproduce the baseline. Record the real numbers.
 2. **14c** first — it is small, and you want a working production build before you
    change auth.
-3. **14a** email sign-in, with its unit tests.
-4. **14b** the seeding script and the credential-scanning static test.
-5. **14d** hardening, one item per commit, each with an assertion.
-6. **14e** wire Playwright back into the standing check.
-7. Confirm all four identities can sign in locally, in a real browser. **That is the
-   exit condition for this phase**, and it is what unblocks Phase 15.
+3. **14f** provision staging and configure both projects. Do this before writing the
+   client code, so 14a can be tested against a real provider from its first commit
+   rather than mocked and hoped for.
+4. **14a** email sign-in, with its unit tests.
+5. **14b** the seeding script and the credential-scanning static test.
+6. **14d** hardening, one item per commit, each with an assertion.
+7. **14e** wire Playwright back into the standing check.
+8. Confirm all four identities can sign in **locally and on staging**, in a real
+   browser, by magic link. **That is the exit condition for this phase**, and it is
+   what unblocks Phase 15.
 
 ## Standing rules
 
