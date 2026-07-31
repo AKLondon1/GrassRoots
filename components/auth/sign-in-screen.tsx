@@ -2,6 +2,7 @@ import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 import { GoogleSignInForm } from "@/components/auth/google-sign-in-form";
+import { MagicLinkForm } from "@/components/auth/magic-link-form";
 import { Button } from "@/components/ui/button";
 import { brand } from "@/lib/brand";
 import { listDemoSessions } from "@/lib/demo/session";
@@ -93,11 +94,29 @@ export function SignInScreen({
             {mode === "supabase" ? (
               <>
                 <p className="mt-4 max-w-[55ch] text-sm leading-6 text-muted">
-                  Continue with your adult Google account. This private beta requires prior
-                  approval or a valid GrassRoots club invitation. A club invitation is still
-                  required before you can access an organisation workspace.
+                  Continue with your adult Google account, or have a sign-in link
+                  emailed to you. This private beta requires prior approval or a valid
+                  GrassRoots club invitation. A club invitation is still required
+                  before you can access an organisation workspace.
                 </p>
                 <GoogleSignInForm nextPath={nextPath} />
+                {/*
+                  The email route is second, not first, because Google is the path
+                  most members already have. It is not a fallback though: it is the
+                  only route that works without a Google account, and the only one a
+                  test can drive, which is why Phase 14 exposes it.
+
+                  No password field, now or later. The action behind this form calls
+                  signInWithOtp only, so this codebase never stores a password and so
+                  never owns a reset flow, a strength policy or a credential-stuffing
+                  surface.
+                */}
+                <div className="mt-8 flex items-center gap-3">
+                  <span aria-hidden="true" className="h-px flex-1 bg-border" />
+                  <span className="text-sm font-medium text-muted">or</span>
+                  <span aria-hidden="true" className="h-px flex-1 bg-border" />
+                </div>
+                <MagicLinkForm nextPath={nextPath} />
               </>
             ) : (
               <>

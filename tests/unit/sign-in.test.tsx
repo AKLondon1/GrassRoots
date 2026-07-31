@@ -74,21 +74,44 @@ describe("sign in", () => {
     expect(screen.getByRole("link", { name: "Platform demo" })).toBeInTheDocument();
   });
 
-  it("renders Google sign-in without email or demo controls in Supabase mode", () => {
+  it("offers both Google and email sign-in, and no demo controls, in Supabase mode", () => {
+    // This assertion previously read "without email", and was the thing keeping the
+    // magic-link route off the screen. The action, the form component and the tests
+    // below have all existed since fe22ca8; only the screen never rendered the form.
+    // Phase 14 reverses that, because Google-only means no human and no test can sign
+    // in without a Google account.
     render(<SignInScreen mode="supabase" nextPath="/invite/raw-token" />);
 
     expect(
       screen.getByRole("button", { name: "Continue with Google" }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Email address")).toBeInTheDocument();
     expect(
-      document.querySelector('input[name="next"]'),
-    ).toHaveAttribute("value", "/invite/raw-token");
-    expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Email me a sign-in link" }),
+    ).toBeInTheDocument();
+    // Both forms carry the same normalised return path.
+    expect(
+      [...document.querySelectorAll('input[name="next"]')].map((input) =>
+        input.getAttribute("value"),
+      ),
+    ).toEqual(["/invite/raw-token", "/invite/raw-token"]);
     expect(screen.queryByRole("link", { name: /demo/i })).not.toBeInTheDocument();
     expect(
       screen.getByText(/prior approval or a valid GrassRoots club invitation/i),
     ).toBeVisible();
     expect(screen.getByText(/club invitation is still required/i)).toBeVisible();
+  });
+
+  it("offers no password field, in either mode", () => {
+    // The magic-links-only decision, made assertable. A password input appearing here
+    // would mean this codebase had started storing credentials, and with them a reset
+    // flow, a strength policy and a credential-stuffing surface.
+    for (const mode of ["supabase", "demo"] as const) {
+      const { unmount } = render(<SignInScreen mode={mode} />);
+      expect(document.querySelector('input[type="password"]')).toBeNull();
+      expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+      unmount();
+    }
   });
 
   it("shows a provider-specific recoverable error", () => {
@@ -142,7 +165,33 @@ describe("sign in", () => {
       "https://grassroots.example/auth/callback",
     );
     expect(state.status).toBe("success");
-    expect(state.message).toMatch(/check your email/i);
+    expect(state.message).toMatch(/sign-in link is on its way/i);
+  });
+
+  it("answers a registered and an unregistered address identically", async () => {
+    // The enumeration guarantee. `shouldCreateUser: false` means Supabase reports an
+    // error for an address with no account, so without this the form would answer
+    // "does this parent have an account at this club" one address at a time.
+    const formData = new FormData();
+    formData.set("email", "alex@example.test");
+    const registered = await requestMagicLinkForMode(
+      "supabase",
+      formData,
+      vi.fn<MagicLinkSender>().mockResolvedValue({ error: null }),
+    );
+    const unregistered = await requestMagicLinkForMode(
+      "supabase",
+      formData,
+      vi
+        .fn<MagicLinkSender>()
+        .mockResolvedValue({ error: { message: "User not found" } }),
+    );
+
+    expect(unregistered).toEqual(registered);
+    expect(unregistered.status).toBe("success");
+    // And the wording must not quietly assert a link was sent, because for an
+    // unregistered address none was.
+    expect(unregistered.message).not.toMatch(/we (have )?sent|check your email/i);
   });
 
   it("returns an inline error when the auth provider is unavailable", async () => {

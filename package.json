@@ -15,7 +15,9 @@
     "test:pwa": "vitest run tests/unit/pwa.test.ts",
     "test:a11y": "playwright test tests/e2e/accessibility.spec.ts",
     "test:e2e": "playwright test",
-    "test:db": "npx supabase db reset && npx supabase test db"
+    "test:db": "npx supabase db reset && npx supabase test db",
+    "seed:auth": "node scripts/seed-auth-identities.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run test:db && npm run test:e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
