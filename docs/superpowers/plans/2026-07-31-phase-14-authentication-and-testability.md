@@ -154,10 +154,17 @@ foreign keys in `seed.sql` will point at the wrong users.
 
 ### Tests
 
-- A static test scanning `supabase/seed.sql` and all tracked fixtures for anything
-  resembling a credential: `encrypted_password`, `password`, a bcrypt prefix, a JWT
-  shape. **This test is the point of the task** — it is what stops a future session
-  taking the shortcut Task 13 refused to take.
+- A static test scanning `supabase/seed.sql` and every other tracked file for anything
+  resembling a credential: Supabase's password column, an assigned password literal, a
+  bcrypt prefix, a JWT shape, a project key, a hosted project URL. **This test is the
+  point of the task** — it is what stops a future session taking the shortcut Task 13
+  refused to take.
+
+  Note this document deliberately names those patterns in prose rather than quoting
+  the literal tokens. The scanner reads every tracked file, so a plan that spelled its
+  own patterns out would fail the check it describes. Prose is the fix; adding this
+  file to the scanner's allowlist is not, because that would exempt it from every
+  other rule as well.
 - The seeding script refuses to run when `NODE_ENV=production`.
 - The script refuses to run against a non-local Supabase URL unless explicitly forced.
 
