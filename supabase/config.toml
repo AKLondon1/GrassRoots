@@ -156,11 +156,23 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+#
+# MUST equal APP_ORIGIN in .env.example, character for character. It previously read
+# `http://127.0.0.1:3000` while the application ran on `http://localhost:3000`. Those are
+# different origins to both the browser and to the origin check in
+# lib/supabase/oauth.ts:20-27, so every magic link was built against an origin the
+# application then refused. `localhost` and `127.0.0.1` are not interchangeable here.
+site_url = "http://localhost:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+#
+# The callback path and nothing else. This is the second gate: the application already
+# refuses a mismatched origin, and a wildcard or a bare origin here would undo that by
+# letting Supabase bounce a token somewhere the application never validated. The previous
+# value was `https://127.0.0.1:3000` -- wrong scheme, wrong host, and not a callback path,
+# so it allow-listed nothing that was ever used.
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -178,6 +190,21 @@ enable_signup = true
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
+# PASSWORDS ARE NOT USED BY THIS APPLICATION. Phase 14a decided magic links only, so no
+# password is ever set, stored, reset or checked. The two settings below therefore govern
+# nothing today and are left at their defaults rather than removed, because the CLI writes
+# them back on `supabase init` and a diff against a hand-stripped file is noise.
+#
+# There is NO config key that disables password sign-in at the project level -- the plan's
+# 14f checklist asks for one and it does not exist in the CLI schema. Enforcement is
+# therefore two assertions instead: no tracked file may call `signInWithPassword`, which
+# scripts/preflight-auth.mjs checks, and no auth.users row may carry a password hash, which
+# belongs in pgTAP against the local database. A setting nobody can point to is not
+# enforcement; those two are.
+#
+# (Deliberately not naming the auth.users password column here. The literal string is what
+# tests/unit/no-committed-credentials.test.ts scans for, and a comment about the rule should
+# not trip the rule.)
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
 minimum_password_length = 6
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
@@ -195,8 +222,20 @@ password_requirements = ""
 # rp_origins = ["http://127.0.0.1:3000"]
 
 [auth.rate_limit]
-# Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+# READ AND RECORDED for Phase 14d, which asks for an asserted number rather than an assumed
+# one. These are the local values; the hosted projects have their own, recorded in
+# docs/AUTH-PROVISIONING.md.
+#
+# Raised from 2. Magic links are the ONLY way in, so this ceiling is the ceiling on signing
+# in at all -- and 14b's exit condition is four identities signing in during one session,
+# which two per hour cannot serve. It fails silently, too: the enumeration defence in
+# app/(auth)/sign-in/actions.ts:103-114 reports a send failure as success, so a throttled
+# link is indistinguishable from a delivered one at the form.
+#
+# 30/hour is local only. It is deliberately NOT the number for a deployed project, where the
+# application-level limits in submitMagicLink (20 per client and 5 per account per 15
+# minutes) are the tighter and more meaningful control.
+email_sent = 30
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -231,7 +270,14 @@ max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+#
+# SET DELIBERATELY, per 14f. 30 minutes, down from the 1 hour default. The link is the whole
+# credential -- anyone holding it is signed in -- and it lands in a mailbox that may sync to
+# a shared family tablet, so an hour is longer than the risk deserves. Thirty minutes still
+# covers the realistic case the plan names: a parent who reads the email on a phone, gets
+# interrupted, and comes back to it. Shorter than about fifteen would start failing honest
+# users, which pushes them to request a second link and burns the rate limit above.
+otp_expiry = 1800
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]
@@ -242,6 +288,19 @@ otp_expiry = 3600
 # pass = "env(SENDGRID_API_KEY)"
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
+
+# The magic-link email. This is the ONLY email a parent receives before they have an
+# account, which makes it the one most likely to be read as phishing -- it arrives
+# unprompted-looking, it contains a single link, and it asks to be clicked. The template
+# therefore names the club, says what the link does, states the expiry, and tells someone
+# who did not request it that ignoring it is safe and sufficient.
+[auth.email.template.magic_link]
+subject = "Your GrassRoots sign-in link"
+# Resolved from the repository root, not from this file's directory. `./templates/...`
+# looks right sitting inside supabase/ and is not: it sends the CLI to <root>/templates,
+# which does not exist, and the whole local stack then refuses to start. The commented
+# invite example below has always had this right.
+content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

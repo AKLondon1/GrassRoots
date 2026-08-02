@@ -15,7 +15,7 @@ Production environment, set:
 ```text
 NEXT_PUBLIC_DATA_MODE=supabase
 APP_ORIGIN=https://<the-exact-production-project>.vercel.app
-NEXT_PUBLIC_SUPABASE_URL=https://mxpuicrkfnyychmwqhus.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<Supabase-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<server-only-service-role-key>
 CRON_SECRET=<32-or-more-random-server-only-characters>
@@ -33,7 +33,7 @@ push and scanner variables unset for this beta.
 
 1. In Google Cloud, create a Web application OAuth client for the beta.
 2. Under **Authorized JavaScript origins**, add the exact production `APP_ORIGIN` (for example, `https://<the-exact-production-project>.vercel.app`) and `http://localhost:3000` for local development. These are origins only: no paths, wildcards, query strings, hashes or credentials. The production entry has no port; local development uses exactly port `3000`.
-3. Under **Authorized redirect URIs**, add the exact Supabase callback `https://mxpuicrkfnyychmwqhus.supabase.co/auth/v1/callback`. Do not add a Vercel URL or a wildcard to this Google field; Supabase completes the provider callback before returning to the application.
+3. Under **Authorized redirect URIs**, add the exact Supabase callback `https://your-project-ref.supabase.co/auth/v1/callback`. Do not add a Vercel URL or a wildcard to this Google field; Supabase completes the provider callback before returning to the application.
 4. In the Supabase project's Google provider settings, enable Google and enter the Google client ID and secret. The client secret stays in Google/Supabase configuration, not this repository or Vercel browser-readable variables.
 5. In Supabase Auth URL configuration, set Site URL to the exact `APP_ORIGIN` from Vercel. Add the exact production callback URL, `https://<the-exact-production-project>.vercel.app/auth/callback`, and retain `http://localhost:3000/auth/callback` for local development. Do not configure a production wildcard callback.
 6. Enable the hosted Supabase **Before User Created** hook with the function `public.hook_restrict_beta_signup`. This database function is supplied by migration `0018_beta_auth_allowlist.sql`; applying the migration does not by itself enable the hosted Auth hook.

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChangeEvent } from "react";
+import { useSyncExternalStore, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { roleLabels, type AppRole } from "@/lib/navigation/screen-registry";
@@ -12,8 +12,17 @@ interface RoleSwitcherProps {
   roles: readonly AppRole[];
 }
 
+const subscribeToHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
 function RoleSwitcher({ value, workspace, roles }: RoleSwitcherProps) {
   const router = useRouter();
+  const isHydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
 
   const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextRole = event.target.value as AppRole;
@@ -33,6 +42,7 @@ function RoleSwitcher({ value, workspace, roles }: RoleSwitcherProps) {
       <select
         aria-label="Acting as"
         className="min-h-9 cursor-pointer bg-transparent font-semibold outline-none"
+        disabled={!isHydrated}
         value={value}
         onChange={handleChange}
       >

@@ -1,11 +1,53 @@
 -- Deterministic, wholly fictional development data. No production or real-person data.
-insert into auth.users (id, email, raw_user_meta_data)
-values
-  ('00000000-0000-4000-8000-000000000201', 'alex.morgan@example.test', '{"display_name":"Alex Morgan"}'),
-  ('00000000-0000-4000-8000-000000000202', 'sam.taylor@example.test', '{"display_name":"Sam Taylor"}'),
-  ('00000000-0000-4000-8000-000000000203', 'priya.shah@example.test', '{"display_name":"Priya Shah"}'),
-  ('00000000-0000-4000-8000-000000000204', 'morgan.lee@example.test', '{"display_name":"Morgan Lee"}'),
-  ('00000000-0000-4000-8000-000000000205', 'jordan.morgan@example.test', '{"display_name":"Jordan Morgan"}')
+
+-- COMPLETE auth rows, not skeletal ones, and still with no credential in sight.
+--
+-- These carried only id, email and display name until Phase 14. That was enough to
+-- satisfy the foreign keys from public.profiles and public.memberships, and it made
+-- every one of them unable to sign in: Task 13 found the browser pass impossible
+-- rather than merely undone. It was worse than "unconfirmed". With `aud` and `role`
+-- null, GoTrue does not treat these as users at all -- the admin API cannot even list
+-- them -- so no route, magic link included, could ever have reached them.
+--
+-- What is added below is account metadata, not secrets: the instance and audience
+-- GoTrue filters on, a confirmed email, and the email provider. There is still NO
+-- password and no token here, and tests/unit/no-committed-credentials.test.ts fails
+-- the build if one ever appears. That is rather the point -- these accounts are
+-- usable precisely because the project signs in with magic links, so there is nothing
+-- to commit and nothing to steal. scripts/seed-auth-identities.mjs mints the links.
+--
+-- email_confirmed_at is set because a club invitation, not an email round trip, is
+-- what gates access to a workspace; leaving it null would block sign-in on a
+-- confirmation these fictional addresses can never complete.
+-- The empty strings below are not decoration. GoTrue scans these token columns into
+-- non-nullable Go strings, so a NULL makes every admin user query fail outright with
+-- "Database error finding users" rather than skipping the row. Leaving them unset is
+-- the difference between accounts that work and an auth system that returns 500.
+insert into auth.users (
+  id, instance_id, aud, role, email, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  email_change_token_current, phone_change, phone_change_token, reauthentication_token
+)
+select
+  identity.id,
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated',
+  'authenticated',
+  identity.email,
+  now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  identity.metadata::jsonb,
+  now(),
+  now(),
+  '', '', '', '', '', '', '', ''
+from (values
+  ('00000000-0000-4000-8000-000000000201'::uuid, 'alex.morgan@example.test', '{"display_name":"Alex Morgan"}'),
+  ('00000000-0000-4000-8000-000000000202'::uuid, 'sam.taylor@example.test', '{"display_name":"Sam Taylor"}'),
+  ('00000000-0000-4000-8000-000000000203'::uuid, 'priya.shah@example.test', '{"display_name":"Priya Shah"}'),
+  ('00000000-0000-4000-8000-000000000204'::uuid, 'morgan.lee@example.test', '{"display_name":"Morgan Lee"}'),
+  ('00000000-0000-4000-8000-000000000205'::uuid, 'jordan.morgan@example.test', '{"display_name":"Jordan Morgan"}')
+) as identity(id, email, metadata)
 on conflict (id) do nothing;
 
 insert into public.profiles (id, display_name, account_type)

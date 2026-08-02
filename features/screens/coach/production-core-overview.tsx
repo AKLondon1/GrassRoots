@@ -22,7 +22,7 @@ export async function ProductionCoachCoreOverview({ organisationId, section, wor
     return <Rows title="Live squad records" rows={(data ?? []) as Array<Record<string, unknown>>}/>;
   }
   const now = new Date().toISOString();
-  const { data, error } = await db.from("event_instances").select("id,team_id,starts_at,ends_at,response_deadline,location_name,status,events(title,kind),teams(name)").eq("organisation_id", organisationId).gte("ends_at", now).neq("status", "cancelled").order("starts_at").limit(50);
+  const { data, error } = await db.from("event_instances").select("id,team_id,starts_at,ends_at,response_deadline,location_name,status,events(title,kind,teams(name))").eq("organisation_id", organisationId).gte("ends_at", now).neq("status", "cancelled").order("starts_at").limit(50);
   if (error) throw new Error("We could not load upcoming team events.");
   const events = (data ?? []) as Array<Record<string, unknown> & { id: string }>;
   if (section === "availability") {

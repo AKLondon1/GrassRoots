@@ -62,7 +62,7 @@ test("Flow 5: coach can preview a fair squad publication", async ({ page }) => {
  * signed-in browser pass against local Supabase is what covers those, and this file
  * does not substitute for it.
  */
-test("the weekly loop is navigable from event edit through to a parent seeing their place", async ({ page }) => {
+test("demo mode only: the weekly loop is navigable, and nothing is persisted", async ({ page }) => {
   await page.goto("/app/riverside-juniors/event-editor?role=coach");
   await expect(page.getByRole("heading", { level: 1, name: "Fixtures and sessions" })).toBeVisible();
   await page.getByRole("textbox", { name: "Event title" }).fill("Sunday match v Meadow Park");

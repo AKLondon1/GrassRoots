@@ -1,0 +1,82 @@
+<!--
+  The magic-link email.
+
+  This is the only message a parent receives BEFORE they have an account, so it is the one
+  most likely to be mistaken for phishing. Every choice below is aimed at that:
+
+  - It names the club and what the link does, in the first sentence, before the button.
+  - It states the expiry as a duration, matching auth.email.otp_expiry in config.toml.
+    If you change one, change the other; scripts/preflight-auth.mjs asserts they agree.
+  - It shows the destination as text as well as a link, because "hover to check the URL"
+    is not advice a parent reads on a phone.
+  - It closes by telling someone who did NOT request this that doing nothing is enough.
+    No "secure your account" call to action, because there is no account to secure and
+    alarm is what phishing uses.
+
+  Inline styles and a table layout, deliberately: Gmail strips <style> blocks and Outlook
+  ignores most modern CSS.
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="background:#f4f5f7;margin:0;padding:24px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+             style="max-width:520px;background:#ffffff;border-radius:12px;padding:32px;text-align:left;">
+        <tr>
+          <td>
+            <p style="margin:0 0 4px;font-size:13px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#5b6472;">
+              GrassRoots
+            </p>
+
+            <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#12161d;font-weight:600;">
+              Your sign-in link
+            </h1>
+
+            <p style="margin:0 0 20px;font-size:16px;line-height:1.55;color:#333b47;">
+              Someone asked to sign in to your club&rsquo;s GrassRoots account using
+              <strong style="color:#12161d;">{{ .Email }}</strong>. Use the button below to
+              finish signing in. It expires in <strong style="color:#12161d;">30 minutes</strong>
+              and works once.
+            </p>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
+              <tr>
+                <td style="border-radius:8px;background:#1f6f43;">
+                  <a href="{{ .ConfirmationURL }}"
+                     style="display:inline-block;padding:13px 26px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+                    Sign in to GrassRoots
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#5b6472;">
+              If the button does not work, copy this address into your browser:
+            </p>
+            <p style="margin:0 0 24px;font-size:13px;line-height:1.5;word-break:break-all;">
+              <a href="{{ .ConfirmationURL }}" style="color:#1f6f43;">{{ .ConfirmationURL }}</a>
+            </p>
+
+            <hr style="border:none;border-top:1px solid #e4e7eb;margin:0 0 20px;" />
+
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.55;color:#5b6472;">
+              <strong style="color:#333b47;">Did not request this?</strong> You can ignore this
+              email. The link stops working on its own and nobody can sign in without it. No
+              account is created and nothing changes if you do nothing.
+            </p>
+
+            <p style="margin:0;font-size:13px;line-height:1.5;color:#8a93a0;">
+              GrassRoots never asks for your password, card details or your child&rsquo;s
+              information by email. We do not use passwords at all &mdash; signing in is
+              always a link like this one.
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#8a93a0;max-width:520px;text-align:center;">
+        Sent by GrassRoots because someone entered this address on the sign-in page.
+      </p>
+    </td>
+  </tr>
+</table>
