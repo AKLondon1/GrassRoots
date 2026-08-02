@@ -33,12 +33,17 @@ interface Filter {
  */
 function createDatabaseStub(rows: Record<string, unknown[]>) {
   const filters: Record<string, Filter[]> = {};
+  const selections: Record<string, string[]> = {};
 
   function builder(table: string) {
     filters[table] ??= [];
+    selections[table] ??= [];
     const result = { data: rows[table] ?? [], error: null };
     const chain: Record<string, unknown> = {
-      select: () => chain,
+      select: (columns: string) => {
+        selections[table]!.push(columns);
+        return chain;
+      },
       eq: (column: string, value: unknown) => {
         filters[table]!.push({ column, value });
         return chain;
@@ -56,6 +61,7 @@ function createDatabaseStub(rows: Record<string, unknown[]>) {
   return {
     client: { from: (table: string) => builder(table) },
     filters: (table: string) => filters[table] ?? [],
+    selections: (table: string) => selections[table] ?? [],
   };
 }
 
@@ -79,8 +85,11 @@ function schedule({
         response_deadline: deadline,
         location_name: "Main pitch",
         status: "scheduled",
-        events: { title: "Under 11s v Meadow Park", kind: "match" },
-        teams: { name: "Under 11s" },
+        events: {
+          title: "Under 11s v Meadow Park",
+          kind: "match",
+          teams: { name: "Under 11s" },
+        },
       },
     ],
     availability_responses: Array.from({ length: replies }, (_unused, index) => ({
@@ -99,6 +108,21 @@ function schedule({
 beforeEach(() => vi.clearAllMocks());
 
 describe("coach schedule", () => {
+  it("loads team names through the event relationship PostgREST exposes", async () => {
+    const database = schedule({ squadSize: 1 });
+    supabase.createClient.mockResolvedValue(database.client);
+
+    await ProductionCoachScheduleScreen({
+      organisationId: ORGANISATION,
+      section: "today",
+      workspace: "riverside",
+    });
+
+    expect(database.selections("event_instances")).toContain(
+      "id,team_id,starts_at,ends_at,response_deadline,location_name,status,events(title,kind,teams(name))",
+    );
+  });
+
   it("shows how many replies are still outstanding", async () => {
     supabase.createClient.mockResolvedValue(schedule({ squadSize: 5, replies: 2 }).client);
 

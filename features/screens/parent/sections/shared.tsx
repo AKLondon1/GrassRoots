@@ -40,7 +40,14 @@ export interface SectionContext {
   readonly now: string;
 }
 
-type NamedObject = { title?: string; kind?: string; name?: string; first_name?: string; last_name?: string };
+interface NamedObject {
+  title?: string;
+  kind?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  teams?: NamedRelation;
+}
 export type NamedRelation = NamedObject | NamedObject[] | null;
 
 export interface EventRow {
@@ -52,7 +59,6 @@ export interface EventRow {
   location_name: string | null;
   status: string;
   events: NamedRelation;
-  teams: NamedRelation;
 }
 
 /**
@@ -61,7 +67,7 @@ export interface EventRow {
  * which is a long way from the cause.
  */
 export const eventColumns =
-  "id,team_id,starts_at,ends_at,response_deadline,location_name,status,events(title,kind),teams(name)";
+  "id,team_id,starts_at,ends_at,response_deadline,location_name,status,events(title,kind,teams(name))";
 
 /**
  * PostgREST returns an embedded row as an object or a single-element array depending
@@ -80,7 +86,7 @@ export function eventKind(event: EventRow): string {
 }
 
 export function teamName(event: EventRow): string {
-  return relation(event.teams).name ?? "Linked team";
+  return relation(relation(event.events).teams ?? null).name ?? "Linked team";
 }
 
 export function formatDate(value: string): string {

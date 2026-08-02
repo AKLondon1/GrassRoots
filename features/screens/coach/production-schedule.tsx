@@ -35,7 +35,12 @@ const panel = "rounded-2xl border border-border-strong bg-background p-5 sm:p-7"
 const control =
   "mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/35";
 
-type Named = { title?: string; kind?: string; name?: string };
+interface Named {
+  title?: string;
+  kind?: string;
+  name?: string;
+  teams?: Relation;
+}
 type Relation = Named | Named[] | null;
 
 interface InstanceRow {
@@ -47,7 +52,6 @@ interface InstanceRow {
   readonly location_name: string | null;
   readonly status: string;
   readonly events: Relation;
-  readonly teams: Relation;
 }
 
 interface TeamRow {
@@ -129,7 +133,7 @@ function EventCard({
       </p>
       <p className="mt-2 flex items-start gap-2 text-sm text-muted">
         <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-        {one(instance.teams).name ?? "Team"}
+        {one(one(instance.events).teams ?? null).name ?? "Team"}
         {instance.location_name ? ` · ${instance.location_name}` : ""}
       </p>
       {summary ? (
@@ -228,7 +232,7 @@ export async function ProductionCoachScheduleScreen({
       db
         .from("event_instances")
         .select(
-          "id,team_id,starts_at,ends_at,response_deadline,location_name,status,events(title,kind),teams(name)",
+          "id,team_id,starts_at,ends_at,response_deadline,location_name,status,events(title,kind,teams(name))",
         )
         .eq("organisation_id", organisationId)
         .gte("ends_at", now.toISOString())
