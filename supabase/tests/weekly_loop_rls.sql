@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(21);
+select plan(53);
 
 -- Runs the given statements in order inside a subtransaction that ALWAYS rolls
 -- back, and reports what happened as a SQLSTATE: '00000' when every statement
@@ -166,6 +166,50 @@ values (
   '00000000-0000-4000-8000-000000001208', null, '00000000-0000-4000-8000-000000000802',
   now() + interval '14 days', now() + interval '14 days' + interval '90 minutes',
   now() + interval '7 days'
+)
+on conflict (id) do nothing;
+
+-- An opposition contact belonging to the SECOND organisation, so the composite
+-- foreign key on events.opposition_contact_id has a cross-tenant target to refuse.
+insert into public.opposition_contacts (id, organisation_id, club_name, display_name, email)
+values (
+  '00000000-0000-4000-8000-000000000d02', '00000000-0000-4000-8000-000000000102',
+  'Probe Rovers', 'Jordan Blake', 'fixtures.probe-rovers@example.test'
+)
+on conflict (id) do nothing;
+
+-- Task 6b fixtures: an Under 11s instance that overlaps the seeded Main pitch
+-- booking. Booking ...2041 runs 09:00 to 10:30 on 9 August with 15 and 20 minute
+-- buffers, so it occupies 08:45 to 10:50 on reservation unit ...2021 ("Main
+-- pitch", parent of halves ...2022 and ...2023). An instance at 09:30 therefore
+-- collides with it, which is what the pitch assertions need.
+--
+-- Its own series keeps it clear of
+-- `unique nulls not distinct (organisation_id, series_id, starts_at)`.
+insert into public.events (id, organisation_id, team_id, kind, title, default_location_name, created_by_membership_id)
+values (
+  '00000000-0000-4000-8000-000000001209', '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000000802', 'match', 'Under 11s v Probe Rovers',
+  'Riverside Sports Ground', '00000000-0000-4000-8000-000000000302'
+)
+on conflict (id) do nothing;
+
+insert into public.event_series (id, organisation_id, event_id, team_id, starts_at, ends_at)
+values (
+  '00000000-0000-4000-8000-000000001219', '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000001209', '00000000-0000-4000-8000-000000000802',
+  '2026-08-09T09:30:00Z', '2026-08-09T10:30:00Z'
+)
+on conflict (id) do nothing;
+
+insert into public.event_instances (
+  id, organisation_id, event_id, series_id, team_id, starts_at, ends_at, response_deadline
+)
+values (
+  '00000000-0000-4000-8000-000000001209', '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000001209', '00000000-0000-4000-8000-000000001219',
+  '00000000-0000-4000-8000-000000000802',
+  '2026-08-09T09:30:00Z', '2026-08-09T10:30:00Z', '2026-08-07T18:00:00Z'
 )
 on conflict (id) do nothing;
 
@@ -586,6 +630,623 @@ select is(
   '00000',
   'a published squad carrying both publication columns is accepted'
 );
+
+-- ===========================================================================
+-- Task 6: amending an event after it exists.
+--
+-- createTeamEvent is only half the job. cancelEventInstance and
+-- rescheduleEventInstance both UPDATE an instance, and both are constrained in
+-- ways that would surface as an opaque database error if the application did not
+-- know about them.
+-- ===========================================================================
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+-- Task 6 assertion A: events_instances_manage_team is `for all`, so the same
+-- capability that creates an instance can move it. Reschedule needs this.
+select is(
+  public.probe_sqlstate(array[
+    $$update public.event_instances
+      set starts_at = '2026-08-09T10:00:00Z', ends_at = '2026-08-09T11:00:00Z'
+      where id = '00000000-0000-4000-8000-000000001209'$$
+  ]),
+  '00000',
+  'events:manage member can reschedule an instance for their own team'
+);
+
+-- Task 6 assertion B: `check ((status = 'cancelled' and cancelled_reason is not
+-- null) or status <> 'cancelled')`. The cancel form must require a reason, and
+-- the action must not send status alone.
+select is(
+  public.probe_sqlstate(array[
+    $$update public.event_instances set status = 'cancelled'
+      where id = '00000000-0000-4000-8000-000000001209'$$
+  ]),
+  '23514',
+  'cancelling an instance without a reason is rejected'
+);
+
+select is(
+  public.probe_sqlstate(array[
+    $$update public.event_instances
+      set status = 'cancelled', cancelled_reason = 'Waterlogged pitch'
+      where id = '00000000-0000-4000-8000-000000001209'$$
+  ]),
+  '00000',
+  'cancelling an instance with a reason is accepted'
+);
+
+-- Task 6 assertion C: `check (response_deadline is null or response_deadline <=
+-- starts_at)`. The database permits a deadline equal to kick-off; the Zod refine
+-- is deliberately stricter, because a deadline at kick-off is useless to a
+-- manager. This pins the database half of that pair.
+select is(
+  public.probe_sqlstate(array[
+    $$update public.event_instances
+      set response_deadline = '2026-08-09T10:00:00Z'
+      where id = '00000000-0000-4000-8000-000000001209'$$
+  ]),
+  '23514',
+  'a response deadline after the event starts is rejected'
+);
+
+-- ===========================================================================
+-- Task 6b: booking a pitch for a friendly.
+--
+-- Migration 0021 gave team staff `pitches:book` and a table policy to match, but
+-- did NOT extend allocate_facility_booking, which still gates on organisation-
+-- scoped pitches:manage. The assertions below pin both halves of that gap: what
+-- the direct table path allows, and what it silently fails to catch.
+-- Still acting as the team-scoped coach ...0302 (user ...0202).
+-- ===========================================================================
+
+-- Task 6b assertion A: the existing RPC is closed to a coach holding
+-- pitches:book, so 6b cannot simply call it.
+select is(
+  public.probe_sqlstate(array[
+    $$select public.allocate_facility_booking(
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000002024',
+        '00000000-0000-4000-8000-000000001209',
+        'Under 11s v Probe Rovers', now(), now() + interval '90 minutes', 0, 0
+      )$$
+  ]),
+  '42501',
+  'allocate_facility_booking refuses a coach holding only pitches:book'
+);
+
+-- Task 6b assertion B: there is no direct table path at all. Migration 0004
+-- grants `authenticated` SELECT only on facility_bookings (line 906), and an RLS
+-- policy can only filter rows a role is already privileged to touch. Migration
+-- 0021's `bookings_book_team_staff` and `bookings_amend_team_staff` are
+-- therefore unreachable, and `pitches:book` grants nothing today. This asserts
+-- the closed door, so that granting INSERT here later is a deliberate act that
+-- fails this test rather than a quiet reopening.
+--
+-- Note the unit is ...2024 ("Pitch 2"), which has no conflicting booking: the
+-- refusal is the privilege, not a clash.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.facility_bookings (
+        organisation_id, reservation_unit_id, event_instance_id, title,
+        starts_at, ends_at, created_by_membership_id
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002024',
+        '00000000-0000-4000-8000-000000001209', 'Under 11s v Probe Rovers',
+        '2026-08-09T09:30:00Z', '2026-08-09T10:30:00Z',
+        '00000000-0000-4000-8000-000000000302'
+      )$$
+  ]),
+  '42501',
+  'facility_bookings takes no direct insert; every booking goes through an RPC'
+);
+
+-- ===========================================================================
+-- Task 6b: book_pitch_for_event, the team-scoped RPC that closes assertion F.
+--
+-- It mirrors allocate_facility_booking but authorises with can_access_team(...,
+-- 'pitches:book') against the team derived from the event instance, so it reuses
+-- every conflict check the direct path skips.
+-- ===========================================================================
+
+-- Task 6b assertion C: the coach can book an unconflicted unit through the RPC.
+select is(
+  public.probe_sqlstate(array[
+    $$select public.book_pitch_for_event(
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000002024',
+        '00000000-0000-4000-8000-000000001209', 0, 0
+      )$$
+  ]),
+  '00000',
+  'book_pitch_for_event lets a pitches:book coach hold a free slot'
+);
+
+-- Task 6b assertion D: a straight clash on the very same unit is refused. Unit
+-- ...2021 already carries the seeded booking occupying 08:45 to 10:50.
+select is(
+  public.probe_sqlstate(array[
+    $$select public.book_pitch_for_event(
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000002021',
+        '00000000-0000-4000-8000-000000001209', 0, 0
+      )$$
+  ]),
+  '23P01',
+  'book_pitch_for_event refuses a unit already booked at that time'
+);
+
+-- Task 6b assertion E: the conflict check understands the reservation-unit
+-- hierarchy, which the GiST exclusion constraint alone does not. Unit ...2022 is
+-- "Main pitch, half A", a child of the booked ...2021. Booking half of a pitch
+-- that is already booked whole must fail, and only reservation_units_conflict
+-- knows that.
+select is(
+  public.probe_sqlstate(array[
+    $$select public.book_pitch_for_event(
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000002022',
+        '00000000-0000-4000-8000-000000001209', 0, 0
+      )$$
+  ]),
+  '23P01',
+  'book_pitch_for_event refuses a pitch half already booked whole'
+);
+
+-- Task 6b assertion F: one slot per event instance, so a double submission
+-- cannot hold two pitches for the same fixture.
+select is(
+  public.probe_sqlstate(array[
+    $$select public.book_pitch_for_event(
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000002024',
+        '00000000-0000-4000-8000-000000001209', 0, 0
+      )$$,
+    $$select public.book_pitch_for_event(
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000002025',
+        '00000000-0000-4000-8000-000000001209', 0, 0
+      )$$
+  ]),
+  '23505',
+  'book_pitch_for_event refuses a second slot for the same event instance'
+);
+
+reset role;
+
+-- Task 6b assertion G: a guardian holds no pitches:book anywhere, so the RPC
+-- refuses them even for their own child's fixture. Guardian ...0401 is user
+-- ...0201, whose child plays for team ...0802.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000201', true);
+
+select is(
+  public.probe_sqlstate(array[
+    $$select public.book_pitch_for_event(
+        '00000000-0000-4000-8000-000000000101',
+        '00000000-0000-4000-8000-000000002024',
+        '00000000-0000-4000-8000-000000001209', 0, 0
+      )$$
+  ]),
+  '42501',
+  'a guardian cannot book a pitch, even for their own child team'
+);
+
+reset role;
+
+-- ===========================================================================
+-- Task 6b: naming the opposition on a friendly.
+--
+-- events.opposition_contact_id arrived in 0024. The composite foreign key is the
+-- whole point: it is what stops a fixture citing another club's address book
+-- entry, without relying on a policy to notice.
+-- ===========================================================================
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+-- Task 6b assertion H: a friendly can name an opponent from its own club's book.
+-- ...0d01 is Meadow Park Juniors in the seed's opposition_contacts.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.events (
+        organisation_id, team_id, kind, title, opposition_contact_id,
+        created_by_membership_id
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000802',
+        'match', 'Under 11s v Meadow Park', '00000000-0000-4000-8000-000000000d01',
+        '00000000-0000-4000-8000-000000000302'
+      )$$
+  ]),
+  '00000',
+  'a match can name an opposition contact from its own organisation'
+);
+
+-- Task 6b assertion I: an opposition contact belonging to another organisation is
+-- refused by the composite foreign key, not by RLS. ...0d02 belongs to Meadow
+-- Park Juniors (organisation ...0102), seeded in the fixture block above.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.events (
+        organisation_id, team_id, kind, title, opposition_contact_id,
+        created_by_membership_id
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000802',
+        'match', 'Under 11s v Someone Else''s Contact',
+        '00000000-0000-4000-8000-000000000d02',
+        '00000000-0000-4000-8000-000000000302'
+      )$$
+  ]),
+  '23503',
+  'a match cannot name another organisation opposition contact'
+);
+
+reset role;
+
+-- ===========================================================================
+-- Task 8: adding a parent through add_guardian_for_player.
+--
+-- role_model.sql already asserts who may call this RPC and for which team. What
+-- is asserted here is what the call leaves behind, because Task 8's application
+-- code depends on all of it: the permission row, the shared household, and guardian
+-- reuse by email.
+--
+-- These read rows back, so they cannot use probe_sqlstate, whose subtransaction
+-- always rolls back. They run as superuser against a real call instead, and the
+-- outer transaction discards everything at the end of the file.
+-- ===========================================================================
+
+-- Act as the team-scoped coach so the RPC's can_access_team check passes, then
+-- add a second guardian to Jamie Morgan (...0601), who already has guardian
+-- ...0401 in household ...0501.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+select lives_ok(
+  $$select public.add_guardian_for_player(
+      '00000000-0000-4000-8000-000000000601', 'Robin Fair',
+      'Robin.Fair@Example.TEST', 'Step-parent'
+    )$$,
+  'team staff can add a guardian for a player on their own team'
+);
+
+reset role;
+
+-- Task 8 assertion A: the new link carries a permission row, and it grants
+-- communication only. Everything wider is a later, deliberate act.
+select results_eq(
+  $$select permission.communication, permission.payments, permission.consent,
+           permission.emergency_contact, permission.restricted_contact
+    from public.guardian_permissions permission
+    join public.player_guardians link
+      on link.id = permission.player_guardian_id
+     and link.organisation_id = permission.organisation_id
+    join public.guardians guardian
+      on guardian.id = link.guardian_id
+     and guardian.organisation_id = link.organisation_id
+    where guardian.email = 'robin.fair@example.test'$$,
+  $$values (true, false, false, false, false)$$,
+  'a guardian added by team staff starts with communication only'
+);
+
+-- Task 8 assertion B: the email is normalised, so "Robin.Fair@Example.TEST"
+-- cannot become a second guardian record alongside the lower-cased one. The
+-- guardians table checks `email = lower(email)`, so the RPC must fold it.
+select is(
+  (select count(*) from public.guardians
+   where organisation_id = '00000000-0000-4000-8000-000000000101'
+     and lower(email) = 'robin.fair@example.test'),
+  1::bigint,
+  'the guardian email is folded to lower case, creating exactly one record'
+);
+
+-- Task 8 assertion C: the second parent joins the child's existing household
+-- rather than starting a new one. This is what keeps siblings and both parents
+-- together, and it is why the application must not create households itself.
+select is(
+  (select link.household_id from public.player_guardians link
+   join public.guardians guardian
+     on guardian.id = link.guardian_id
+    and guardian.organisation_id = link.organisation_id
+   where guardian.email = 'robin.fair@example.test'),
+  (select link.household_id from public.player_guardians link
+   where link.player_id = '00000000-0000-4000-8000-000000000601'
+     and link.guardian_id = '00000000-0000-4000-8000-000000000401'),
+  'a second guardian joins the household the child already belongs to'
+);
+
+-- Task 8 assertion D: calling twice is idempotent. The form can be double
+-- submitted, and `on conflict do nothing` on the link must not leave a second
+-- permission row or a duplicate guardian.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+select lives_ok(
+  $$select public.add_guardian_for_player(
+      '00000000-0000-4000-8000-000000000601', 'Robin Fair',
+      'robin.fair@example.test', 'Step-parent'
+    )$$,
+  'adding the same guardian twice is accepted rather than erroring'
+);
+
+reset role;
+
+select is(
+  (select count(*) from public.guardian_permissions permission
+   join public.player_guardians link
+     on link.id = permission.player_guardian_id
+    and link.organisation_id = permission.organisation_id
+   join public.guardians guardian
+     on guardian.id = link.guardian_id
+    and guardian.organisation_id = link.organisation_id
+   where guardian.email = 'robin.fair@example.test'),
+  1::bigint,
+  'a repeated call leaves exactly one permission row'
+);
+
+-- ===========================================================================
+-- Task 9: the idempotency key must identify the child, not just the event.
+--
+-- availability_responses is unique on (organisation_id, idempotency_key) as well
+-- as on (organisation_id, event_instance_id, player_id). The production action
+-- currently sends `app:<random uuid>`, so every resubmission mints a new key and
+-- the uniqueness is decorative. Replacing it with a deterministic key makes a
+-- double submission idempotent, but only if the key includes the player: a key
+-- built from the event alone silently blocks the second child in a family.
+--
+-- Asserted as superuser: the unique constraint is under test, not a policy.
+-- The `validate_event_child_team_scope` trigger from 0009 still applies, so both
+-- players must be on the event's team and linked to the guardian named. Jamie
+-- Morgan (...0601, guardian ...0401) and Rowan Taylor (...0603, guardian ...0403)
+-- both play for team ...0802.
+-- ===========================================================================
+
+-- Task 9 assertion A: two children on the same team replying to the same event
+-- collide when the key is derived from the event alone. In a two-child family
+-- this silently loses the second reply, which is the bug the player-scoped key
+-- avoids.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601',
+        '00000000-0000-4000-8000-000000000401', 'available',
+        'avail:00000000-0000-4000-8000-000000001208'
+      )$$,
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603',
+        '00000000-0000-4000-8000-000000000403', 'available',
+        'avail:00000000-0000-4000-8000-000000001208'
+      )$$
+  ]),
+  '23505',
+  'an idempotency key built from the event alone blocks a sibling reply'
+);
+
+-- Task 9 assertion B: including the player separates them. This is the exact key
+-- shape the action builds, at 79 characters, inside the 8 to 120 bound.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601',
+        '00000000-0000-4000-8000-000000000401', 'available',
+        'avail:00000000-0000-4000-8000-000000001208:00000000-0000-4000-8000-000000000601'
+      )$$,
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603',
+        '00000000-0000-4000-8000-000000000403', 'available',
+        'avail:00000000-0000-4000-8000-000000001208:00000000-0000-4000-8000-000000000603'
+      )$$
+  ]),
+  '00000',
+  'a player-scoped idempotency key lets both children in a family reply'
+);
+
+-- Task 9 assertion C: the lower bound is real, so the key format cannot be
+-- shortened to something like a bare status without failing here first.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.availability_responses (
+        organisation_id, event_instance_id, team_id, player_id, guardian_id,
+        status, idempotency_key
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001208',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601',
+        '00000000-0000-4000-8000-000000000401', 'available', 'short'
+      )$$
+  ]),
+  '23514',
+  'an idempotency key below eight characters is rejected'
+);
+
+-- ===========================================================================
+-- Task 7: team staff can read the lists the friendly form offers.
+--
+-- Migration 0026. Coach ...0302 holds pitches:book and fixtures:manage through a
+-- TEAM-scoped assignment on ...0802, and holds none of pitches:manage,
+-- pitches:inspect, venues:manage or opposition:manage. Before 0026 every one of
+-- these counts was zero, so the form rendered three empty dropdowns.
+-- ===========================================================================
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+select is(
+  (select count(*) from public.reservation_units
+   where organisation_id = '00000000-0000-4000-8000-000000000101'),
+  5::bigint,
+  'a pitches:book coach can read the club pitch list'
+);
+
+select is(
+  (select count(*) from public.venues
+   where organisation_id = '00000000-0000-4000-8000-000000000101'),
+  1::bigint,
+  'a pitches:book coach can read the venue a pitch belongs to'
+);
+
+select is(
+  (select count(*) from public.opposition_contacts
+   where organisation_id = '00000000-0000-4000-8000-000000000101'),
+  1::bigint,
+  'a fixtures:manage coach can read the opposition address book'
+);
+
+-- The read is widened, the write is not. Creating a pitch still needs
+-- pitches:manage, which a coach does not hold.
+--
+-- Asserted as an INSERT rather than an UPDATE on purpose. RLS *filters* an
+-- UPDATE: a row the caller cannot reach through a FOR UPDATE or FOR ALL policy
+-- is simply not in the set, so the statement succeeds having changed nothing and
+-- reports '00000'. Only a WITH CHECK violation raises 42501, and that needs a row
+-- being written. An UPDATE assertion here would pass whether or not the policy
+-- held, which is worse than no assertion.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.reservation_units (
+        organisation_id, facility_id, name, capacity
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002011',
+        'Pitch invented by a coach', 11
+      )$$
+  ]),
+  '42501',
+  'reading the pitch list does not let a coach create a pitch'
+);
+
+reset role;
+
+-- A guardian holds neither capability, so nothing above reaches them.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000201', true);
+
+select is(
+  (select count(*) from public.reservation_units),
+  0::bigint,
+  'a guardian still sees no pitches'
+);
+
+reset role;
+
+-- ===========================================================================
+-- Task 10: picking and publishing a squad.
+--
+-- Assertion 5 already pins that squad_members has no UPDATE policy, and
+-- assertion 6 that publishing needs both columns. These pin what the picker
+-- itself must not get wrong. Instance ...1209 is the Task 6b fixture and has no
+-- squad yet; the seed's ...1201 already has squad ...1401.
+-- ===========================================================================
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000202', true);
+
+-- Task 10 assertion A: a squads:manage coach can open a draft squad.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squads (organisation_id, event_instance_id, team_id, status)
+      values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001209',
+        '00000000-0000-4000-8000-000000000802', 'draft'
+      )$$
+  ]),
+  '00000',
+  'a squads:manage coach can open a draft squad for their own fixture'
+);
+
+-- Task 10 assertion B: squads is unique on (organisation_id, event_instance_id),
+-- so creation is idempotent per event and the action must tolerate the clash
+-- rather than making a second squad. The seed's squad ...1401 sits on instance
+-- ...1202, not ...1201.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squads (organisation_id, event_instance_id, team_id, status)
+      values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202',
+        '00000000-0000-4000-8000-000000000802', 'draft'
+      )$$
+  ]),
+  '23505',
+  'a second squad for the same fixture is refused'
+);
+
+-- Task 10 assertion C: unique (organisation_id, squad_id, player_id). A form that
+-- let a coach tick the same child as both selected and standby would fail here,
+-- so setSquadMembers must reject that before writing.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squad_members (
+        organisation_id, squad_id, team_id, player_id, status, position_order
+      ) values
+        ('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+         '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000604',
+         'selected', 1),
+        ('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+         '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000604',
+         'standby', 2)$$
+  ]),
+  '23505',
+  'the same child cannot be both selected and standby in one squad'
+);
+
+-- Task 10 assertion D: position_order is `> 0` where not null, so the ordering
+-- must be one-based. A zero-based array index fails here.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squad_members (
+        organisation_id, squad_id, team_id, player_id, status, position_order
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000604',
+        'selected', 0
+      )$$
+  ]),
+  '23514',
+  'position_order is one-based, so a zero-based index is rejected'
+);
+
+-- Task 10 assertion E: a child from another team cannot be put in this squad.
+--
+-- The refusal comes from the `squad_members_validate_player_team` trigger, which
+-- runs validate_event_child_team_scope() BEFORE INSERT and raises
+-- foreign_key_violation, not from the RLS policy. squad_members_insert_manage
+-- only checks the squad's team_id, which the caller supplies, and the foreign key
+-- only requires the player to exist somewhere in the organisation. Without that
+-- trigger this would be accepted.
+--
+-- Player ...0602 is an Under 7s child; squad ...1401 belongs to the Under 11s.
+-- The picker filters its columns to the fixture's own team as well, so this is
+-- defence in depth rather than the only guard.
+select is(
+  public.probe_sqlstate(array[
+    $$insert into public.squad_members (
+        organisation_id, squad_id, team_id, player_id, status, position_order
+      ) values (
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001401',
+        '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000602',
+        'selected', 1
+      )$$
+  ]),
+  '23503',
+  'a child from another team cannot be added to this squad'
+);
+
+reset role;
 
 select * from finish();
 rollback;

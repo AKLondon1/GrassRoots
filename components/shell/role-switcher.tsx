@@ -3,12 +3,7 @@
 import type { ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  getDefaultScreen,
-  getScreenHref,
-  roleLabels,
-  type AppRole,
-} from "@/lib/navigation/screen-registry";
+import { roleLabels, type AppRole } from "@/lib/navigation/screen-registry";
 
 interface RoleSwitcherProps {
   value: AppRole;

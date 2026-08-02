@@ -42,6 +42,60 @@ export function grantsCapability(
 }
 
 /**
+ * Resolve the signed-in member's access, or null if they have none here.
+ *
+ * `requireCapability` is for a write that has already been decided on. A screen
+ * that has to decide what to OFFER cannot use it, because it throws: the coach
+ * composer needs the grant list itself, so it can list exactly the teams the author
+ * may publish to and hide the club-wide option from someone who may not. Offering a
+ * control the database will refuse is the same class of defect as the empty
+ * dropdowns migration 0026 fixed.
+ */
+export async function resolveAccess(workspace: string): Promise<AllowedAccess | null> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+
+  const access = await resolveProductionWorkspaceAccess(
+    createSupabaseTenancyAccessReader(supabase),
+    workspace,
+    data.user.id,
+  );
+
+  return access.status === "allowed" ? access : null;
+}
+
+/**
+ * Every team the member holds `capability` over, and whether they hold it
+ * club-wide.
+ *
+ * An organisation-scoped grant covers every team, which is why `organisation` is
+ * reported separately rather than expanded into a team list the caller would then
+ * have to keep in step with the teams table.
+ */
+export function capabilityScopes(
+  access: AllowedAccess,
+  capability: Capability,
+): { organisation: boolean; teamIds: readonly string[] } {
+  const relevant = access.scopedGrants.filter(
+    (grant) =>
+      grant.organisationId === access.organisationId &&
+      grant.capabilities.includes(capability),
+  );
+
+  return {
+    organisation: relevant.some((grant) => grant.scopeKind === "organisation"),
+    teamIds: [
+      ...new Set(
+        relevant.flatMap((grant) => (grant.scopeKind === "team" ? [grant.scopeId] : [])),
+      ),
+    ],
+  };
+}
+
+/**
  * Resolve the signed-in member and refuse unless they hold `capability`.
  *
  * RLS remains the backstop. This is defence in depth: without it, a server action

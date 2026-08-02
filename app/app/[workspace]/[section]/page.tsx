@@ -27,12 +27,16 @@ import { ParentCoreFootballScreen } from "@/features/screens/parent/core-footbal
 import { ClubOperationsScreen } from "@/features/screens/club/operations";
 import { ProductionClubOperationsScreen, ProductionSupportOperationsScreen } from "@/features/screens/club/production-operations";
 import { ProductionCoachingScopeSelector, ProductionCoachingScreen, ProductionParentDevelopmentScreen } from "@/features/screens/coach/production-coaching";
+import { ProductionComposeScreen } from "@/features/screens/coach/production-compose";
 import { ParentAccountScreen } from "@/features/screens/parent/account";
 import { ProductionParentCoreFootballScreen } from "@/features/screens/parent/production-core-football";
 import { ClubGovernanceScreen } from "@/features/screens/club/governance";
 import { PlatformOperationsScreen } from "@/features/screens/platform/operations";
 import { ProductionClubGovernanceScreen, ProductionParentAccountScreen, ProductionPlatformOperationsScreen } from "@/features/screens/production-governance";
 import { ProductionCoachCoreOverview } from "@/features/screens/coach/production-core-overview";
+import { TeamPeoplePanel } from "@/features/screens/coach/production-team-people";
+import { ProductionCoachScheduleScreen } from "@/features/screens/coach/production-schedule";
+import { ProductionSquadSelectionScreen } from "@/features/screens/coach/production-squad-selection";
 import { parseUuidCursor } from "@/lib/pagination/keyset";
 
 export const metadata: Metadata = {
@@ -42,7 +46,7 @@ export const metadata: Metadata = {
 
 interface WorkspaceSectionPageProps {
   params: Promise<{ section: string; workspace: string }>;
-  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; cursor?: string | string[] }>;
+  searchParams: Promise<{ role?: string | string[]; clubRole?: string; platformScope?: string; concernId?: string; supportSessionId?: string; resourceType?: string; resourceId?: string; teamId?: string; matchId?: string; sessionId?: string; instance?: string; cursor?: string | string[]; child?: string; rollFrom?: string; rollTo?: string }>;
 }
 
 export default async function WorkspaceSectionPage({
@@ -133,6 +137,7 @@ export default async function WorkspaceSectionPage({
   const parentAccountSections = new Set(["payments", "consents", "messages", "notifications", "household", "calendar", "help"]);
   const coachCoreSections = new Set(["today", "team", "calendar", "event-editor", "availability", "squad", "match-day", "formation", "playing-time", "attendance", "training", "drills", "players", "development", "compose", "volunteers"]);
   const phase4CoachSections = new Set(["match-day", "formation", "playing-time", "attendance", "training", "drills", "players", "development", "compose", "volunteers"]);
+  const coachScheduleSections = new Set(["today", "calendar", "event-editor"]);
   const clubOperationsSections = new Set([
     "overview", "calendar", "teams", "seasons", "people", "invitations", "venues",
     "pitch-planner", "inspections", "maintenance", "fixtures", "opposition",
@@ -167,17 +172,41 @@ export default async function WorkspaceSectionPage({
   } else if (environment.dataMode !== "demo" && role === "platform" && platformOperationsSections.has(section) && section !== "support") {
     screenContent = <ProductionPlatformOperationsScreen section={section} cursor={cursor} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && isClubOperationsSection && organisationId) {
-    screenContent = <ProductionClubOperationsScreen organisationId={organisationId} section={section} workspace={workspace} cursor={cursor} />;
+    // `rollFrom` and `rollTo` drive the season rollover preview, chosen by a GET
+    // form so that reading what a rollover would do costs nothing and can be redone.
+    // An unrecognised id is dropped by the screen, which checks both against the
+    // organisation's own season list before using either.
+    screenContent = <ProductionClubOperationsScreen organisationId={organisationId} section={section} workspace={workspace} cursor={cursor} rollover={{ from: query.rollFrom, to: query.rollTo }} />;
   } else if (environment.dataMode !== "demo" && isPlatformSupportSection && organisationId) {
     screenContent = <ProductionSupportOperationsScreen organisationId={organisationId} workspace={workspace} readRequest={{ sessionId: query.supportSessionId, resourceType: query.resourceType, resourceId: query.resourceId }} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && section === "compose" && organisationId) {
+    // Above the Phase 4 branch on purpose. `compose` is in phase4CoachSections too,
+    // so ordering these the other way round would render the coaching screen and the
+    // composer would never be reached.
+    screenContent = <ProductionComposeScreen organisationId={organisationId} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && phase4CoachSections.has(section) && organisationId) {
     const coachingSelection = { teamId: query.teamId, matchId: query.matchId, sessionId: query.sessionId };
-    screenContent = <div className="space-y-5"><ProductionCoachingScopeSelector organisationId={organisationId} section={section} selection={coachingSelection}/><ProductionCoachingScreen organisationId={organisationId} section={section} workspace={workspace} selection={coachingSelection}/></div>;
+    // `players` is already where a coach goes to look at their squad, so adding
+    // players and parents belongs on that same screen rather than a new route.
+    // The development view stays below it, untouched.
+    screenContent = <div className="space-y-5"><ProductionCoachingScopeSelector organisationId={organisationId} section={section} selection={coachingSelection}/>{section === "players" ? <TeamPeoplePanel organisationId={organisationId} workspace={workspace}/> : null}<ProductionCoachingScreen organisationId={organisationId} section={section} workspace={workspace} selection={coachingSelection}/></div>;
   } else if (environment.dataMode !== "demo" && role === "parent" && section === "child" && organisationId) {
     screenContent = <ProductionParentDevelopmentScreen organisationId={organisationId} />;
   } else if (environment.dataMode !== "demo" && role === "parent" && parentCoreSections.has(section) && section !== "child" && organisationId) {
-    screenContent = <ProductionParentCoreFootballScreen organisationId={organisationId} section={section} workspace={workspace} />;
+    // `child` selects between linked children. An unrecognised id falls back to the
+    // first, because the candidate list is narrowed to this guardian before the URL is
+    // consulted, so a stale or hostile id is simply absent from it.
+    screenContent = <ProductionParentCoreFootballScreen organisationId={organisationId} section={section} workspace={workspace} childId={query.child} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && section === "squad" && organisationId) {
+    // `instance` is set by the "Pick the squad" link on every event card.
+    screenContent = <ProductionSquadSelectionScreen organisationId={organisationId} workspace={workspace} instanceId={query.instance} />;
+  } else if (environment.dataMode !== "demo" && role === "coach" && coachScheduleSections.has(section) && organisationId) {
+    screenContent = <ProductionCoachScheduleScreen organisationId={organisationId} section={section} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && role === "coach" && isCoreFootballSection && organisationId) {
+    // `team` and `availability` stay on the overview. `team` is still a JSON dump,
+    // but `availability` renders the MagicLinkIssuer over
+    // list_magic_availability_scopes, which nothing else replaces. Deleting this
+    // file, as the plan suggested, would have removed that.
     screenContent = <ProductionCoachCoreOverview organisationId={organisationId} section={section} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && isCoreFootballSection) {
     screenContent = (

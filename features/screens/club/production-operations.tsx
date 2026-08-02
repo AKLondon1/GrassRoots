@@ -10,13 +10,27 @@ import { Status } from "@/components/ui/status";
 import { allocateFacilityBooking, closeFacilityAndResolveBooking, createMaintenanceRequest, createVenue, createVolunteerShift, promoteCleanClubDocument, reserveEquipment, revokeSupportSessionAction, startSupportSession, submitSupportRequest } from "@/features/facilities/actions";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { keysetPage } from "@/lib/pagination/keyset";
-import { createAgeGroup, createOppositionContact, createPlayer, createSeason, createTeam } from "@/features/people/production-actions";
+import { createAgeGroup, createOppositionContact, createSeason, createTeam, rollOverSeason } from "@/features/people/production-actions";
+import { TeamPeoplePanel } from "@/features/screens/coach/production-team-people";
 
 interface UnitRow { id: string; name: string; capacity: number; accessible: boolean; floodlit: boolean }
 interface BookingRow { id: string; reservation_unit_id: string; event_instance_id: string | null; title: string; starts_at: string; ends_at: string; buffer_before_minutes: number; buffer_after_minutes: number; status: string }
 interface EventInstanceRow { id: string; event_id: string; starts_at: string; ends_at: string }
 
-export async function ProductionClubOperationsScreen({ organisationId, section, workspace, cursor }: { organisationId: string; section: string; workspace: string; cursor?: string }) {
+interface SeasonRow { id: string; name: string; starts_on: string; ends_on: string; is_active: boolean }
+interface RolloverSelection { from?: string; to?: string }
+interface RolloverTeam {
+  sourceTeamId: string;
+  sourceName: string;
+  canAdvance: boolean;
+  reason: string | null;
+  ageGroupId: string | null;
+  proposedName: string | null;
+  playersCarried: number;
+  playersAgedOut: Array<{ playerId: string; name: string; ageAtStart: number }>;
+}
+
+export async function ProductionClubOperationsScreen({ organisationId, section, workspace, cursor, rollover }: { organisationId: string; section: string; workspace: string; cursor?: string; rollover?: RolloverSelection }) {
   const client = await createServerSupabaseClient();
   if (!client) throw new Error("The organisation connection is unavailable.");
   const db = client as unknown as SupabaseClient;
@@ -109,7 +123,11 @@ export async function ProductionClubOperationsScreen({ organisationId, section, 
   if (section === "seasons") {
     const { data, error } = await db.from("seasons").select("id,name,starts_on,ends_on,is_active").eq("organisation_id", organisationId).order("starts_on", { ascending: false }).limit(250);
     if (error) throw new Error("We could not load seasons.");
-    return <OperationalForm title="Create season" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createSeason} className="grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Season name" name="name"/><Field label="Starts on" name="startsOn" type="date"/><Field label="Ends on" name="endsOn" type="date"/><Button type="submit" className="sm:w-fit">Create season</Button></form></OperationalForm>;
+    const seasonRows = (data ?? []) as SeasonRow[];
+    return <div className="space-y-5">
+      <OperationalForm title="Create season" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createSeason} className="grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Season name" name="name"/><Field label="Starts on" name="startsOn" type="date"/><Field label="Ends on" name="endsOn" type="date"/><Button type="submit" className="sm:w-fit">Create season</Button></form></OperationalForm>
+      <SeasonRollover organisationId={organisationId} workspace={workspace} seasons={seasonRows} selection={rollover} db={db}/>
+    </div>;
   }
 
   if (section === "teams") {
@@ -124,10 +142,11 @@ export async function ProductionClubOperationsScreen({ organisationId, section, 
     return <div className="space-y-5"><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Create team</h2>{seasonOptions.length && ageOptions.length ? <form action={createTeam} className="mt-5 grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Team name" name="name"/><label className="text-sm font-semibold">Season<select name="seasonId" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{seasonOptions.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select></label><label className="text-sm font-semibold">Age group<select name="ageGroupId" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{ageOptions.map((age) => <option key={age.id} value={age.id}>{age.name}</option>)}</select></label><Button type="submit" className="sm:w-fit">Create team</Button></form> : <p className="mt-4 text-sm text-muted">Create at least one season and age group to enable team creation.</p>}</section><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Add age group</h2><form action={createAgeGroup} className="mt-5 grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="Name" name="name"/><Field label="Minimum age" name="minimumAge" type="number"/><Field label="Maximum age" name="maximumAge" type="number"/><Button type="submit" className="sm:w-fit">Add age group</Button></form></section><OperationalForm title="Saved teams" rows={(teams ?? []) as Array<Record<string, unknown>>}><p className="text-sm text-muted">Teams are scoped to a season and age group and protected by organisation permissions.</p></OperationalForm></div>;
   }
 
+  // Shared with the coach's own people screen. A club administrator sees every
+  // team here because RLS gives them organisation scope; a coach sees only the
+  // teams they staff. The panel itself needs no branch for the difference.
   if (section === "people") {
-    const { data, error } = await db.from("players").select("id,first_name,last_name,date_of_birth,status").eq("organisation_id", organisationId).order("last_name").limit(250);
-    if (error) throw new Error("We could not load players.");
-    return <OperationalForm title="Add player" rows={(data ?? []) as Array<Record<string, unknown>>}><form action={createPlayer} className="grid gap-4 sm:grid-cols-3"><HiddenContext organisationId={organisationId} workspace={workspace}/><Field label="First name" name="firstName"/><Field label="Last name" name="lastName"/><Field label="Date of birth" name="dateOfBirth" type="date"/><Button type="submit" className="sm:w-fit">Add player</Button></form></OperationalForm>;
+    return <TeamPeoplePanel organisationId={organisationId} workspace={workspace}/>;
   }
 
   if (section === "opposition") {
@@ -180,6 +199,99 @@ export async function ProductionSupportOperationsScreen({ organisationId, worksp
     readResult = data;
   }
   return <div className="space-y-5"><section className="rounded-2xl border border-border-strong bg-background p-5 sm:p-7"><h2 className="text-xl font-semibold">Start audited support access</h2><p className="mt-2 text-sm text-muted">Access is limited to records explicitly authorised on the request and expires within 60 minutes.</p>{requests.length ? <form action={startSupportSession} className="mt-5 grid gap-4 sm:grid-cols-2"><HiddenContext organisationId={organisationId} workspace={workspace}/><label className="text-sm font-semibold">Authorised request<select name="supportRequestId" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{requests.map((request) => <option key={request.id} value={request.id}>{request.subject}</option>)}</select></label><Field label="Duration (minutes)" name="durationMinutes" type="number" defaultValue="30"/><Field label="Specific access reason" name="reason"/><Button type="submit" className="sm:col-span-2 sm:w-fit">Start support session</Button></form> : <p className="mt-5 text-sm text-muted">No open authorised support requests.</p>}</section>{sessions.map((session) => <section key={session.id} className="rounded-2xl border border-border-strong bg-background p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Active support session</h2><p className="mt-1 text-sm text-muted">Expires {new Date(session.expires_at).toLocaleString("en-GB")} · {session.allowed_resources.join(", ") || "No record access"}</p></div><Status tone="warning">Time-limited</Status></div><form method="get" className="mt-4 grid gap-3 sm:grid-cols-3"><input type="hidden" name="role" value="platform"/><input type="hidden" name="supportSessionId" value={session.id}/><label className="text-sm font-semibold">Resource type<select name="resourceType" className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{session.allowed_resources.map((type) => <option key={type} value={type}>{type}</option>)}</select></label><Field label="Authorised record ID" name="resourceId"/><Button type="submit" className="sm:self-end">Read and audit resource</Button></form><form action={revokeSupportSessionAction} className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row"><HiddenContext organisationId={organisationId} workspace={workspace}/><input type="hidden" name="sessionId" value={session.id}/><Field label="Revocation reason" name="reason"/><Button type="submit" variant="secondary" className="sm:self-end">Revoke access</Button></form></section>)}{readResult ? <section className="rounded-2xl border border-border-strong bg-background p-5"><h2 className="font-semibold">Audited resource result</h2><pre className="mt-3 overflow-x-auto rounded-xl bg-surface p-4 text-xs">{JSON.stringify(readResult, null, 2)}</pre></section> : null}</div>;
+}
+
+/**
+ * Season rollover, in two steps because the second one is irreversible.
+ *
+ * Step one is a plain GET back to this same screen carrying `rollFrom` and
+ * `rollTo`, so choosing a pair of seasons costs nothing and can be redone freely.
+ * Step two renders the preview and only then offers a submit.
+ *
+ * THE PREVIEW IS THE POINT. A rollover that just runs is a rollover nobody can
+ * check, and the two things most worth checking are the ones a club would otherwise
+ * discover in September: a team with no age group to advance into, and a child who
+ * has aged out of the side they were in. Both are rendered, named, before anything
+ * is written.
+ *
+ * Every name is editable and every team can be unticked. The default is the
+ * successor age group's name rather than a rewrite of the old one, because
+ * "Under 10s" to "Under 11s" only works while a club numbers its teams, and
+ * "Colts" or "Juniors A" would come out as nonsense.
+ */
+async function SeasonRollover({ organisationId, workspace, seasons, selection, db }: { organisationId: string; workspace: string; seasons: SeasonRow[]; selection?: RolloverSelection; db: SupabaseClient }) {
+  const panel = "rounded-2xl border border-border-strong bg-background p-5 sm:p-7";
+  if (seasons.length < 2) {
+    return <section className={panel}>
+      <h2 className="text-xl font-semibold">Roll a season over</h2>
+      <div className="mt-5"><EmptyState title="Create the next season first" description="Rollover copies teams from one season into another, so there needs to be somewhere to copy them to."/></div>
+    </section>;
+  }
+
+  const from = selection?.from && seasons.some((season) => season.id === selection.from) ? selection.from : undefined;
+  const to = selection?.to && seasons.some((season) => season.id === selection.to) ? selection.to : undefined;
+  const seasonName = new Map(seasons.map((season) => [season.id, season.name]));
+
+  const picker = <form method="get" className="mt-5 grid gap-4 sm:grid-cols-3">
+    <label className="text-sm font-semibold">Copy teams from<select name="rollFrom" defaultValue={from ?? ""} className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{seasons.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select></label>
+    <label className="text-sm font-semibold">Into<select name="rollTo" defaultValue={to ?? ""} className="mt-2 min-h-11 w-full rounded-[10px] border border-border-strong bg-background px-3">{seasons.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select></label>
+    <Button type="submit" variant="secondary" className="sm:w-fit sm:self-end">Preview rollover</Button>
+  </form>;
+
+  if (!from || !to || from === to) {
+    return <section className={panel}>
+      <h2 className="text-xl font-semibold">Roll a season over</h2>
+      <p className="mt-2 text-sm leading-6 text-muted">Copies every team into the next season, advancing each one to the age group a year above and bringing its players with it. Nothing is written until you have read the preview.</p>
+      {picker}
+      {from && to && from === to ? <p className="mt-4 text-sm font-semibold">Choose two different seasons.</p> : null}
+    </section>;
+  }
+
+  const { data, error } = await db.rpc("preview_season_rollover", {
+    requested_organisation_id: organisationId,
+    requested_source_season_id: from,
+    requested_target_season_id: to,
+  });
+  if (error) throw new Error("We could not work out what this rollover would do.");
+  const teams = ((data as { teams?: RolloverTeam[] } | null)?.teams ?? []);
+  const advancing = teams.filter((team) => team.canAdvance);
+  const held = teams.filter((team) => !team.canAdvance);
+
+  return <section className={panel}>
+    <h2 className="text-xl font-semibold">Roll a season over</h2>
+    <p className="mt-2 text-sm leading-6 text-muted">{seasonName.get(from)} into {seasonName.get(to)}. Nothing is written until you confirm.</p>
+    {picker}
+    {advancing.length ? <form action={rollOverSeason} className="mt-6 space-y-4">
+      <HiddenContext organisationId={organisationId} workspace={workspace}/>
+      <input type="hidden" name="sourceSeasonId" value={from}/>
+      <input type="hidden" name="targetSeasonId" value={to}/>
+      <ul className="divide-y divide-border">
+        {advancing.map((team) => <li className="py-4 first:pt-0" key={team.sourceTeamId}>
+          <div className="flex flex-wrap items-center gap-3">
+            <input type="checkbox" name={`include_${team.sourceTeamId}`} defaultChecked className="size-5 rounded border-border-strong"/>
+            <span className="font-semibold">{team.sourceName}</span>
+            <span className="text-sm text-muted">becomes</span>
+            <input name={`name_${team.sourceTeamId}`} defaultValue={team.proposedName ?? ""} maxLength={100} className="min-h-11 flex-1 rounded-[10px] border border-border-strong bg-background px-3 text-sm"/>
+          </div>
+          <p className="mt-2 text-sm text-muted">{team.playersCarried} {team.playersCarried === 1 ? "player comes" : "players come"} across.</p>
+          {team.playersAgedOut.length ? <p className="mt-1 text-sm">
+            <span className="font-semibold">Not coming: </span>
+            {team.playersAgedOut.map((player) => `${player.name} (${player.ageAtStart} at the start of the season)`).join(", ")}
+          </p> : null}
+        </li>)}
+      </ul>
+      <Button type="submit" className="sm:w-fit">Create {advancing.length} {advancing.length === 1 ? "team" : "teams"}</Button>
+    </form> : <div className="mt-6"><EmptyState title="No team can advance" description="Every team is either already in the target season or has no age group a year above it. Create the missing age group and preview again."/></div>}
+    {held.length ? <div className="mt-6 rounded-xl bg-surface p-4">
+      <p className="font-semibold">Staying where they are</p>
+      <ul className="mt-3 space-y-2 text-sm">
+        {held.map((team) => <li key={team.sourceTeamId}>
+          <span className="font-semibold">{team.sourceName}</span>
+          <span className="text-muted"> · {team.reason === "already-exists" ? "already in the target season" : "no age group one year above this one, so create it first"}</span>
+        </li>)}
+      </ul>
+    </div> : null}
+  </section>;
 }
 
 function HiddenContext({ organisationId, workspace }: { organisationId: string; workspace: string }) { return <><input type="hidden" name="organisationId" value={organisationId}/><input type="hidden" name="workspace" value={workspace}/></>; }
