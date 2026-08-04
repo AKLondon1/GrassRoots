@@ -9,6 +9,8 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/features/people/team-people-actions", () => ({
   addPlayerToTeam: vi.fn(),
   addGuardianForPlayer: vi.fn(),
+  updatePlayer: vi.fn(),
+  removePlayerFromTeam: vi.fn(),
 }));
 
 import { TeamPeoplePanel } from "@/features/screens/coach/production-team-people";

@@ -112,6 +112,65 @@ export async function addPlayerToTeam(formData: FormData): Promise<void> {
   refreshPeople(input.workspace);
 }
 
+/**
+ * Correct a player's details.
+ *
+ * `teamId` is submitted for the capability check only, exactly as
+ * `addGuardianForPlayer` does. The RPC re-derives reachability from the player's
+ * own active memberships, so naming a team the player is not in fails there too.
+ */
+export async function updatePlayer(formData: FormData): Promise<void> {
+  const input = z
+    .object({
+      ...context,
+      playerId: z.uuid(),
+      firstName: z.string().trim().min(1).max(80),
+      lastName: z.string().trim().min(1).max(80),
+      dateOfBirth: z.iso.date(),
+    })
+    .parse(Object.fromEntries(formData));
+  await authorise(input);
+
+  if (input.dateOfBirth > new Date().toISOString().slice(0, 10)) {
+    throw new Error("Date of birth cannot be in the future.");
+  }
+
+  const db = await database();
+  const { error } = await db.rpc("update_player", {
+    target_player_id: input.playerId,
+    player_first_name: input.firstName,
+    player_last_name: input.lastName,
+    player_date_of_birth: input.dateOfBirth,
+  });
+  if (error) throw new Error(peopleMessage(error, "The player could not be updated."));
+
+  refreshPeople(input.workspace);
+}
+
+/**
+ * Take a player off a team.
+ *
+ * The RPC deactivates the membership rather than deleting anything, so this is
+ * recoverable and takes no attendance or squad history with it. A `false` return
+ * means the membership was already inactive, which is the outcome the click asked
+ * for, so it is not surfaced as an error.
+ */
+export async function removePlayerFromTeam(formData: FormData): Promise<void> {
+  const input = z
+    .object({ ...context, playerId: z.uuid() })
+    .parse(Object.fromEntries(formData));
+  await authorise(input);
+
+  const db = await database();
+  const { error } = await db.rpc("remove_player_from_team", {
+    target_player_id: input.playerId,
+    target_team_id: input.teamId,
+  });
+  if (error) throw new Error(peopleMessage(error, "The player could not be removed."));
+
+  refreshPeople(input.workspace);
+}
+
 const guardianSchema = z.object({
   ...context,
   playerId: z.uuid(),
