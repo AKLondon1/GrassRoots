@@ -26,6 +26,7 @@ import { CoachCoreFootballScreen } from "@/features/screens/coach/core-football"
 import { ParentCoreFootballScreen } from "@/features/screens/parent/core-football";
 import { ClubOperationsScreen } from "@/features/screens/club/operations";
 import { ProductionClubOperationsScreen, ProductionSupportOperationsScreen } from "@/features/screens/club/production-operations";
+import { ProductionPeopleAccessScreen } from "@/features/screens/club/production-people-access";
 import { ProductionCoachingScopeSelector, ProductionCoachingScreen, ProductionParentDevelopmentScreen } from "@/features/screens/coach/production-coaching";
 import { ProductionComposeScreen } from "@/features/screens/coach/production-compose";
 import { ParentAccountScreen } from "@/features/screens/parent/account";
@@ -171,6 +172,13 @@ export default async function WorkspaceSectionPage({
     screenContent = <ProductionParentAccountScreen organisationId={organisationId} section={section} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && role === "platform" && platformOperationsSections.has(section) && section !== "support") {
     screenContent = <ProductionPlatformOperationsScreen section={section} cursor={cursor} workspace={workspace} />;
+  } else if (environment.dataMode !== "demo" && role === "club" && section === "access" && organisationId) {
+    // Kept out of clubOperationsSections deliberately. Every section in that set is
+    // handed to ProductionClubOperationsScreen, and access is gated on roles:manage
+    // rather than that screen's mix of capabilities. The registry's own denial is
+    // what refuses a club member who lacks it; there is no second gate here because
+    // assign_role and the RLS policy on scoped_role_assignments are the real ones.
+    screenContent = <ProductionPeopleAccessScreen organisationId={organisationId} workspace={workspace} />;
   } else if (environment.dataMode !== "demo" && isClubOperationsSection && organisationId) {
     // `rollFrom` and `rollTo` drive the season rollover preview, chosen by a GET
     // form so that reading what a rollover would do costs nothing and can be redone.

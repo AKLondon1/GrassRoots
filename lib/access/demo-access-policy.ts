@@ -39,6 +39,9 @@ const demoCapabilitiesByRole = {
     "teams:manage",
     "seasons:manage",
     "people:manage",
+    // Deliberately NOT roles:manage. The access screen reads live memberships and
+    // scoped_role_assignments, which the demo has no database for, so offering the
+    // link here would lead to a crash rather than a demonstration.
     "invitations:manage",
     "venues:manage",
     "pitches:manage",

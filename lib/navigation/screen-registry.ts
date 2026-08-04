@@ -118,6 +118,11 @@ const clubScreens = [
   defineScreen("club", "teams", "Teams", "teams:manage", "directory"),
   defineScreen("club", "seasons", "Seasons", "seasons:manage", "settings"),
   defineScreen("club", "people", "People", "people:manage", "directory"),
+  // Sits next to People on purpose: People is the roster, Access is what each of
+  // them may do. Gated on roles:manage, the same capability the RLS policy on
+  // scoped_role_assignments and the assign_role RPC both check, so the nav entry
+  // cannot appear for someone the database would then refuse.
+  defineScreen("club", "access", "People and access", "roles:manage", "directory"),
   defineScreen("club", "invitations", "Invitations", "invitations:manage", "list"),
   defineScreen("club", "venues", "Venues", "venues:manage", "directory"),
   defineScreen("club", "pitch-planner", "Pitch planner", "pitches:manage", "planner"),
