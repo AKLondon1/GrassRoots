@@ -8,8 +8,8 @@ import {
 import { brand } from "@/lib/brand";
 import { environment } from "@/lib/env";
 import {
+  getAllowedScreensForRole,
   getDefaultScreen,
-  getDefaultScreenForRoles,
   getScreenHref,
   parseAppRole,
   parseRequestedRole,
@@ -62,11 +62,15 @@ export default async function WorkspacePage({
   );
   if (access.status === "denied") redirect("/sign-in?error=workspace");
 
-  redirect(
-    getScreenHref(
-      workspace,
-      getDefaultScreenForRoles(access.roles, access.capabilities),
-      access.role,
-    ),
-  );
+  // Keyed on the ACTIVE role, not on the member's highest-priority one.
+  // getDefaultScreenForRoles reads roles[0], which is the same thing only while a
+  // member holds one role. Someone holding platform as well as club was sent to the
+  // platform default, "organisations", with `?role=club` stamped on it -- a screen
+  // the active role cannot open, so the switcher landed on a denied state. This is
+  // the selection resolveAuthenticatedHome already makes.
+  const landing =
+    getAllowedScreensForRole(access.role, access.capabilities)[0] ??
+    getDefaultScreen(access.role);
+
+  redirect(getScreenHref(workspace, landing, access.role));
 }
