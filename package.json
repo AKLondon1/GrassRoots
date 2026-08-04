@@ -15,9 +15,13 @@
     "test:pwa": "vitest run tests/unit/pwa.test.ts",
     "test:a11y": "playwright test tests/e2e/accessibility.spec.ts",
     "test:e2e": "playwright test",
+    "test:e2e:supabase": "playwright test --config=playwright.supabase.config.ts",
     "test:db": "npx supabase db reset && npx supabase test db",
     "seed:auth": "node scripts/seed-auth-identities.mjs",
     "preflight:auth": "node scripts/preflight-auth.mjs",
+    "preflight:db": "node scripts/preflight-supabase.mjs",
+    "preflight": "npm run preflight:auth && npm run preflight:db",
+    "phase15:loop": "node scripts/run-phase-15-loop.mjs",
     "verify": "npm run typecheck && npm run lint && npm run preflight:auth && npm run test && npm run test:db && npm run test:e2e"
   },
   "dependencies": {
@@ -53,6 +57,7 @@
     "eslint-config-next": "^16.2.11",
     "fast-check": "^4.9.0",
     "jsdom": "^29.1.1",
+    "supabase": "2.111.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

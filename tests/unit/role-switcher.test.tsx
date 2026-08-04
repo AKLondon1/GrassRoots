@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -8,6 +9,18 @@ vi.mock("next/navigation", () => ({
 import { RoleSwitcher } from "@/components/shell/role-switcher";
 
 describe("role switcher", () => {
+  it("does not expose role switching before hydration", () => {
+    const html = renderToStaticMarkup(
+      <RoleSwitcher
+        value="club"
+        workspace="riverside"
+        roles={["club", "parent"]}
+      />,
+    );
+
+    expect(html).toMatch(/<select[^>]*disabled/);
+  });
+
   it("offers only the roles the member actually holds", () => {
     render(
       <RoleSwitcher
