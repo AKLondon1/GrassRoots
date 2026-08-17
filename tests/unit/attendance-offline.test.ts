@@ -12,6 +12,15 @@ describe("offline attendance queue", () => {
     expect(queue.enqueue(item)).toEqual(item);
   });
 
+  it("keeps an action recorded for a session that kicked off more than a day ago", () => {
+    const queue = new AttendanceQueue();
+    const longAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    queue.enqueue({ organisationId: "org", sessionId: "session", playerId: "player", status: "present", occurredAt: longAgo });
+    // The retention window runs from when the coach queued the action, not from
+    // kick-off, so catching up on an old session must not purge it on sight.
+    expect(queue.pending()).toHaveLength(1);
+  });
+
   it("resolves conflicts by the newest explicit action and records the decision", () => {
     const result = resolveAttendanceConflict(
       { organisationId: "org", sessionId: "session", playerId: "player", status: "absent", occurredAt: "2026-08-02T08:32:00.000Z" },

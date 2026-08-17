@@ -29,7 +29,11 @@ export class AttendanceQueue {
     validateAction(action);
     const attendeeKey = action.playerId ?? `guest:${action.attendeeLabel?.trim().toLowerCase()}`;
     const idempotencyKey = `${action.organisationId}:${action.sessionId}:${attendeeKey}:${action.occurredAt}`;
-    const queuedAt = "queuedAt" in action ? action.queuedAt : action.occurredAt;
+    // The 24-hour window is a retention control on how long a child identifier may
+    // sit on this device, so it runs from when the action was queued, not from when
+    // the attendance happened. Deriving it from `occurredAt` purged anything recorded
+    // for a session that kicked off more than a day ago, which is ordinary use.
+    const queuedAt = "queuedAt" in action ? action.queuedAt : new Date().toISOString();
     const expiresAt = "expiresAt" in action ? action.expiresAt : new Date(Date.parse(queuedAt) + 24 * 60 * 60 * 1000).toISOString();
     const safe: QueuedAttendanceAction = {
       organisationId: action.organisationId,

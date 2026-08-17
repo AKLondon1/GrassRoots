@@ -186,8 +186,13 @@ select throws_ok(
 reset role;
 
 savepoint late_availability;
+-- The deadline must read as passed, and `check (response_deadline <= starts_at)`
+-- must still hold. A bare `now()` satisfied both only while the fixture's kickoff
+-- was still in the future; once the wall clock passed 2026-08-09 it began writing
+-- a deadline after kickoff and aborted the whole file. Anchoring to the earlier of
+-- now and kickoff is passed-and-valid whichever side of the fixture date we are on.
 update public.event_instances
-set response_deadline = now() - interval '1 minute'
+set response_deadline = least(now(), starts_at) - interval '1 minute'
 where id = '00000000-0000-4000-8000-000000001202';
 delete from public.availability_responses
 where id = '00000000-0000-4000-8000-000000001221';
