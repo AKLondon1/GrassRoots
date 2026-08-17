@@ -71,11 +71,11 @@ grant execute on function public.probe_sqlstate(text[]) to authenticated;
 
 -- Second organisation, for the cross-tenant assertion.
 insert into auth.users (id, email, raw_user_meta_data)
-values ('00000000-0000-4000-8000-000000000206', 'casey.reed@example.test', '{"display_name":"Casey Reed"}')
+values ('00000000-0000-4000-9000-000000000206', 'casey.reed@example.test', '{"display_name":"Casey Reed"}')
 on conflict (id) do nothing;
 
 insert into public.profiles (id, display_name, account_type)
-values ('00000000-0000-4000-8000-000000000206', 'Casey Reed', 'adult')
+values ('00000000-0000-4000-9000-000000000206', 'Casey Reed', 'adult')
 on conflict (id) do nothing;
 
 insert into public.organisations (id, name, slug, status)
@@ -88,8 +88,8 @@ on conflict (organisation_id) do nothing;
 
 insert into public.memberships (id, organisation_id, user_id, status, joined_at)
 values (
-  '00000000-0000-4000-8000-000000000306', '00000000-0000-4000-8000-000000000102',
-  '00000000-0000-4000-8000-000000000206', 'active', '2026-07-01T09:00:00Z'
+  '00000000-0000-4000-9000-000000000306', '00000000-0000-4000-8000-000000000102',
+  '00000000-0000-4000-9000-000000000206', 'active', '2026-07-01T09:00:00Z'
 )
 on conflict (id) do nothing;
 
@@ -109,7 +109,7 @@ on conflict (id) do nothing;
 
 insert into public.teams (id, organisation_id, season_id, age_group_id, name)
 values (
-  '00000000-0000-4000-8000-000000000803', '00000000-0000-4000-8000-000000000102',
+  '00000000-0000-4000-9000-000000000803', '00000000-0000-4000-8000-000000000102',
   '00000000-0000-4000-8000-000000000702', '00000000-0000-4000-8000-000000000713', 'Under 11s'
 )
 on conflict (id) do nothing;
@@ -117,15 +117,15 @@ on conflict (id) do nothing;
 insert into public.events (id, organisation_id, team_id, kind, title, created_by_membership_id)
 values (
   '00000000-0000-4000-8000-000000001207', '00000000-0000-4000-8000-000000000102',
-  '00000000-0000-4000-8000-000000000803', 'training', 'Meadow Park training',
-  '00000000-0000-4000-8000-000000000306'
+  '00000000-0000-4000-9000-000000000803', 'training', 'Meadow Park training',
+  '00000000-0000-4000-9000-000000000306'
 )
 on conflict (id) do nothing;
 
 insert into public.event_series (id, organisation_id, event_id, team_id, starts_at, ends_at)
 values (
   '00000000-0000-4000-8000-000000001217', '00000000-0000-4000-8000-000000000102',
-  '00000000-0000-4000-8000-000000001207', '00000000-0000-4000-8000-000000000803',
+  '00000000-0000-4000-8000-000000001207', '00000000-0000-4000-9000-000000000803',
   '2026-08-02T08:30:00Z', '2026-08-02T10:00:00Z'
 )
 on conflict (id) do nothing;
@@ -321,7 +321,7 @@ select is(
         organisation_id, event_id, series_id, team_id, starts_at, ends_at
       ) values (
         '00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000001207',
-        '00000000-0000-4000-8000-000000001217', '00000000-0000-4000-8000-000000000803',
+        '00000000-0000-4000-8000-000000001217', '00000000-0000-4000-9000-000000000803',
         '2026-10-11T09:00:00Z', '2026-10-11T10:30:00Z'
       )$$
   ]),
