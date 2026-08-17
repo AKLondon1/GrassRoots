@@ -212,8 +212,23 @@ select throws_ok(
 reset role;
 rollback to savepoint late_availability;
 
+-- The seed gives this instance a fixed response deadline of 2026-08-05. Once the
+-- wall clock passed that date the window closed, the UPDATE policy's USING clause
+-- stopped matching the row, and the statement below updated nothing and raised
+-- nothing: a security assertion that passes by touching no data proves nothing.
+-- The constraint `response_deadline <= starts_at` rules out moving the deadline
+-- forward, since kickoff is itself in the past, so open the window the way the
+-- schema already allows: a null deadline. The trigger is then what answers.
+savepoint guardian_reassignment;
+update public.event_instances
+set response_deadline = null
+where id = '00000000-0000-4000-8000-000000001202';
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000201', true);
+-- 23503 comes from `validate_event_child_team_scope`, which raises
+-- foreign_key_violation for "Guardian must be linked to the player" before RLS
+-- gets to refuse the same write with 42501. The trigger is the tighter guarantee.
 select throws_ok(
   $$update public.availability_responses
     set guardian_id = '00000000-0000-4000-8000-000000000403'
@@ -222,6 +237,7 @@ select throws_ok(
   'guardian identity cannot be reassigned through availability updates'
 );
 reset role;
+rollback to savepoint guardian_reassignment;
 
 insert into public.poll_respondents (
   id, organisation_id, poll_id, team_id, player_id

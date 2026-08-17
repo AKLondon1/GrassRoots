@@ -55,7 +55,7 @@
 
 begin;
 
-select plan(22);
+select plan(23);
 
 create or replace function public.probe_sqlstate(statements text[])
 returns text
@@ -299,8 +299,8 @@ select is(
      )->'teams'
    ) entry
    where entry->>'sourceTeamId' = '00000000-0000-4000-8000-000000000801'),
-  'Under 8',
-  'the Under 7s are proposed under the new age group name, not by string surgery'
+  'Under 8s',
+  'the Under 7s keep their name with the age band moved up, not the age group name'
 );
 
 select is(
@@ -391,15 +391,27 @@ select is(
      '00000000-0000-4000-8000-000000000701',
      '00000000-0000-4000-8000-000000000702', null
    )->>'createdCount')::int),
-  1,
-  'the rollover creates exactly the one team that could advance'
+  4,
+  'every Under 7 side advances, each under its own name'
+);
+
+-- The naming rule itself, not just the count. Four sides out of one age group have
+-- to land on four distinct names or three of them are skipped and their rosters
+-- stay behind, which is the defect 0035 fixes. "Under 11s" is absent because
+-- Under 11 has no successor age group to advance into.
+select is(
+  (select array_agg(name order by name) from public.teams
+   where organisation_id = '00000000-0000-4000-8000-000000000101'
+     and season_id = '00000000-0000-4000-8000-000000000702'),
+  array['U8 Eagles', 'U8 Falcons', 'U8 Hawks', 'Under 8s'],
+  'each side keeps its own name with the age band moved up'
 );
 
 select is(
   (select age_group_id from public.teams
    where organisation_id = '00000000-0000-4000-8000-000000000101'
      and season_id = '00000000-0000-4000-8000-000000000702'
-     and name = 'Under 8'),
+     and name = 'Under 8s'),
   '00000000-0000-4000-8000-000000000713'::uuid,
   'the new team sits in the successor age group'
 );
@@ -418,7 +430,7 @@ select is(
    join public.teams team
      on team.id = membership.team_id and team.organisation_id = membership.organisation_id
    where team.season_id = '00000000-0000-4000-8000-000000000702'
-     and team.name = 'Under 8'
+     and team.name = 'Under 8s'
      and membership.member_kind = 'player'),
   1::bigint,
   'the roster travelled with the team'
@@ -443,7 +455,7 @@ select is(
      on team.id = announcement.team_id and team.organisation_id = announcement.organisation_id
    where team.season_id = '00000000-0000-4000-8000-000000000702'
      and announcement.status = 'published'),
-  1::bigint,
+  4::bigint,
   'each created team is announced to that team, not club-wide'
 );
 
@@ -467,7 +479,7 @@ select is(
      on team.id = announcement.team_id and team.organisation_id = announcement.organisation_id
    where team.season_id = '00000000-0000-4000-8000-000000000702'
      and announcement.status = 'published'),
-  1::bigint,
+  4::bigint,
   'and sends no second announcement'
 );
 
