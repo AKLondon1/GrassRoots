@@ -22,6 +22,7 @@
     "preflight:db": "node scripts/preflight-supabase.mjs",
     "preflight": "npm run preflight:auth && npm run preflight:db",
     "phase15:loop": "node scripts/run-phase-15-loop.mjs",
+    "demo:refresh": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/refresh-demo-dates.sql",
     "verify": "npm run typecheck && npm run lint && npm run preflight:auth && npm run test && npm run test:db && npm run test:e2e"
   },
   "dependencies": {
