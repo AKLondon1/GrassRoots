@@ -263,7 +263,7 @@ values ('00000000-0000-4000-8000-000000002031', '00000000-0000-4000-8000-0000000
 on conflict (id) do nothing;
 
 insert into public.facility_bookings (id, organisation_id, reservation_unit_id, event_instance_id, title, starts_at, ends_at, buffer_before_minutes, buffer_after_minutes, created_by_membership_id)
-values ('00000000-0000-4000-8000-000000002041', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002021', null, 'Under 11s v Meadow Park Juniors', '2026-08-09T09:00:00Z', '2026-08-09T10:30:00Z', 15, 20, '00000000-0000-4000-8000-000000000303')
+values ('00000000-0000-4000-8000-000000002041', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002021', null, 'Under 11s v Meadow Park Juniors', date_trunc('day', now()) + interval '3 days' + interval '9 hours', date_trunc('day', now()) + interval '3 days' + interval '10 hours 30 minutes', 15, 20, '00000000-0000-4000-8000-000000000303')
 on conflict (id) do nothing;
 
 insert into public.facility_inspections (id, organisation_id, reservation_unit_id, inspected_by_membership_id, inspected_at, outcome, notes)
@@ -287,11 +287,11 @@ values ('00000000-0000-4000-8000-000000002081', '00000000-0000-4000-8000-0000000
 on conflict (id) do nothing;
 
 insert into public.equipment_reservations (id, organisation_id, equipment_item_id, event_id, quantity, starts_at, ends_at)
-values ('00000000-0000-4000-8000-000000002082', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002081', null, 18, '2026-08-09T08:15:00Z', '2026-08-09T11:00:00Z')
+values ('00000000-0000-4000-8000-000000002082', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000002081', null, 18, date_trunc('day', now()) + interval '3 days' + interval '8 hours 15 minutes', date_trunc('day', now()) + interval '3 days' + interval '11 hours')
 on conflict (id) do nothing;
 
 insert into public.volunteer_shifts (id, organisation_id, event_id, title, starts_at, ends_at, required_people)
-values ('00000000-0000-4000-8000-000000002091', '00000000-0000-4000-8000-000000000101', null, 'Match-day welcome desk', '2026-08-09T08:30:00Z', '2026-08-09T09:15:00Z', 1)
+values ('00000000-0000-4000-8000-000000002091', '00000000-0000-4000-8000-000000000101', null, 'Match-day welcome desk', date_trunc('day', now()) + interval '3 days' + interval '8 hours 30 minutes', date_trunc('day', now()) + interval '3 days' + interval '9 hours 15 minutes', 1)
 on conflict (id) do nothing;
 
 insert into public.facility_blocks (id, organisation_id, reservation_unit_id, starts_at, ends_at, reason)
@@ -393,6 +393,24 @@ values
   ('00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000802', 'match', 'Under 11s v Meadow Park Juniors', 'Riverside Sports Ground · Main pitch', '00000000-0000-4000-8000-000000000302')
 on conflict (id) do nothing;
 
+-- THE WEEKLY LOOP IS ANCHORED TO now(), NOT TO FIXED DATES.
+--
+-- These rows were originally written with literal August 2026 dates. That was
+-- fine on the day and wrong a fortnight later: once the wall clock passed them
+-- every session was in the past and every response deadline had closed, so the
+-- demo showed a club where nothing was happening and no availability could be
+-- given. The pgTAP suite never caught it, because its fixtures build their own
+-- time (see weekly_loop_rls.sql:152) and so are blind to this file rotting.
+--
+-- The shape below is deliberate: one session four days gone so attendance has
+-- something to show, a match three days out with its deadline still open, and a
+-- further session the week after. Anything reading "is this still open?" needs a
+-- future deadline to say yes to.
+--
+-- The season itself is deliberately NOT relative: tests/e2e/club-people.spec.ts
+-- asserts the exact string "2026/27 season". It stays valid until 2027-05-31,
+-- at which point the season row and that assertion need revisiting together.
+
 insert into public.event_series (
   id, organisation_id, event_id, team_id, time_zone, recurrence_rule,
   starts_at, ends_at, until_at
@@ -404,9 +422,9 @@ values (
   '00000000-0000-4000-8000-000000000802',
   'Europe/London',
   '{"frequency":"weekly","interval":1,"localTime":"09:30"}',
-  '2026-08-02T08:30:00Z',
-  '2026-08-02T10:00:00Z',
-  '2026-09-27T08:30:00Z'
+  date_trunc('day', now()) - interval '4 days' + interval '8 hours 30 minutes',
+  date_trunc('day', now()) - interval '4 days' + interval '10 hours',
+  date_trunc('day', now()) + interval '52 days' + interval '8 hours 30 minutes'
 )
 on conflict (id) do nothing;
 
@@ -415,9 +433,9 @@ insert into public.event_instances (
   response_deadline, location_name, status
 )
 values
-  ('00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000001211', '00000000-0000-4000-8000-000000000802', '2026-08-02T08:30:00Z', '2026-08-02T10:00:00Z', '2026-07-30T17:00:00Z', 'Riverside Sports Ground · Pitch 2', 'scheduled'),
-  ('00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', null, '00000000-0000-4000-8000-000000000802', '2026-08-09T09:00:00Z', '2026-08-09T10:30:00Z', '2026-08-05T18:00:00Z', 'Riverside Sports Ground · Main pitch', 'scheduled'),
-  ('00000000-0000-4000-8000-000000001203', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000001211', '00000000-0000-4000-8000-000000000802', '2026-08-16T09:30:00Z', '2026-08-16T11:00:00Z', '2026-08-13T17:00:00Z', 'Riverside Sports Ground · Pitch 3', 'scheduled')
+  ('00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000001211', '00000000-0000-4000-8000-000000000802', date_trunc('day', now()) - interval '4 days' + interval '8 hours 30 minutes', date_trunc('day', now()) - interval '4 days' + interval '10 hours', date_trunc('day', now()) - interval '7 days' + interval '17 hours', 'Riverside Sports Ground · Pitch 2', 'scheduled'),
+  ('00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', null, '00000000-0000-4000-8000-000000000802', date_trunc('day', now()) + interval '3 days' + interval '9 hours', date_trunc('day', now()) + interval '3 days' + interval '10 hours 30 minutes', date_trunc('day', now()) + interval '1 day' + interval '18 hours', 'Riverside Sports Ground · Main pitch', 'scheduled'),
+  ('00000000-0000-4000-8000-000000001203', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001201', '00000000-0000-4000-8000-000000001211', '00000000-0000-4000-8000-000000000802', date_trunc('day', now()) + interval '10 days' + interval '9 hours 30 minutes', date_trunc('day', now()) + interval '10 days' + interval '11 hours', date_trunc('day', now()) + interval '8 days' + interval '17 hours', 'Riverside Sports Ground · Pitch 3', 'scheduled')
 on conflict (id) do nothing;
 
 insert into public.event_exceptions (
@@ -429,9 +447,16 @@ values (
   '00000000-0000-4000-8000-000000000101',
   '00000000-0000-4000-8000-000000001211',
   '00000000-0000-4000-8000-000000000802',
-  '2026-08-16T08:30:00Z',
+  date_trunc('day', now()) + interval '10 days' + interval '8 hours 30 minutes',
   '00000000-0000-4000-8000-000000001203',
-  '{"startsAt":"2026-08-16T09:30:00Z","locationName":"Riverside Sports Ground · Pitch 3"}'
+  jsonb_build_object(
+    'startsAt',
+    to_char(
+      (date_trunc('day', now()) + interval '10 days' + interval '9 hours 30 minutes') at time zone 'UTC',
+      'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+    ),
+    'locationName', 'Riverside Sports Ground · Pitch 3'
+  )
 )
 on conflict (organisation_id, series_id, original_starts_at) do nothing;
 
@@ -440,8 +465,8 @@ insert into public.availability_responses (
   status, idempotency_key, responded_at
 )
 values
-  ('00000000-0000-4000-8000-000000001221', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601', '00000000-0000-4000-8000-000000000401', 'available', 'demo-jamie-match-availability', '2026-07-20T18:05:00Z'),
-  ('00000000-0000-4000-8000-000000001222', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603', '00000000-0000-4000-8000-000000000403', 'unsure', 'demo-rowan-match-availability', '2026-07-20T19:10:00Z')
+  ('00000000-0000-4000-8000-000000001221', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000601', '00000000-0000-4000-8000-000000000401', 'available', 'demo-jamie-match-availability', date_trunc('day', now()) - interval '1 day' + interval '18 hours 5 minutes'),
+  ('00000000-0000-4000-8000-000000001222', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001202', '00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000603', '00000000-0000-4000-8000-000000000403', 'unsure', 'demo-rowan-match-availability', date_trunc('day', now()) - interval '1 day' + interval '19 hours 10 minutes')
 on conflict (id) do nothing;
 
 insert into public.polls (
@@ -451,7 +476,7 @@ values (
   '00000000-0000-4000-8000-000000001301',
   '00000000-0000-4000-8000-000000000101',
   '00000000-0000-4000-8000-000000000802',
-  'September training time', 'open', '2026-07-24T18:00:00Z',
+  'September training time', 'open', date_trunc('day', now()) + interval '5 days' + interval '18 hours',
   '00000000-0000-4000-8000-000000000302'
 )
 on conflict (id) do nothing;
@@ -460,9 +485,9 @@ insert into public.poll_options (
   id, organisation_id, poll_id, team_id, starts_at, ends_at, pitch_capacity
 )
 values
-  ('00000000-0000-4000-8000-000000001311', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', '2026-09-05T08:00:00Z', '2026-09-05T09:30:00Z', 10),
-  ('00000000-0000-4000-8000-000000001312', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', '2026-09-05T10:00:00Z', '2026-09-05T11:30:00Z', 9),
-  ('00000000-0000-4000-8000-000000001313', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', '2026-09-05T16:00:00Z', '2026-09-05T17:30:00Z', 7)
+  ('00000000-0000-4000-8000-000000001311', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', date_trunc('day', now()) + interval '14 days' + interval '8 hours', date_trunc('day', now()) + interval '14 days' + interval '9 hours 30 minutes', 10),
+  ('00000000-0000-4000-8000-000000001312', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', date_trunc('day', now()) + interval '14 days' + interval '10 hours', date_trunc('day', now()) + interval '14 days' + interval '11 hours 30 minutes', 9),
+  ('00000000-0000-4000-8000-000000001313', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001301', '00000000-0000-4000-8000-000000000802', date_trunc('day', now()) + interval '14 days' + interval '16 hours', date_trunc('day', now()) + interval '14 days' + interval '17 hours 30 minutes', 7)
 on conflict (id) do nothing;
 
 insert into public.squads (
