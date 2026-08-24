@@ -1,0 +1,61 @@
+# Nothing re-ran the tests on merge before this file existed.
+#
+# Vercel's build was the only automated check, and a build proves the app
+# compiles, not that it works. PR #10 is the reason this exists: a change to
+# supabase/seed.sql broke 21 pgTAP assertions across four files, and the only
+# thing that caught it was a human remembering to run the suite by hand.
+#
+# The division of labour is deliberate. Vercel builds; this runs the tests.
+# The build is not repeated here because it needs Supabase credentials, and
+# Vercel already does it on every push with the real ones.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Typecheck, lint, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  database:
+    name: pgTAP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # Runs the same command a developer runs locally, deliberately. A CI
+      # command that drifts from the local one stops being evidence about
+      # the local one.
+      - run: npx supabase start
+      - run: npm run test:db
+      - if: failure()
+        run: npx supabase status || true
